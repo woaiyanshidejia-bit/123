@@ -1,0 +1,8 @@
+{
+  "csp_bypass": false,
+  "standard_csp_real_ui_flow": "PASS",
+  "inline_handlers_work": true,
+  "page_errors": [],
+  "bound_to": "127.0.0.1",
+  "external_frontend_requests": 0
+}

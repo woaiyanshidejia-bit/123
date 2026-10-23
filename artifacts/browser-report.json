@@ -1,0 +1,20 @@
+{
+  "browser": "154.0.8037.57",
+  "checks": [
+    "中文导航7页",
+    "创建模拟任务",
+    "暂停/继续",
+    "20家公司贯通及16合格",
+    "Excel下载",
+    "诊断状态",
+    "预算基线确认",
+    "真实模式未连接安全暂停",
+    "CSRF拒绝",
+    "Host拒绝"
+  ],
+  "harness_csp_bypass": true,
+  "console_errors": [],
+  "real_qualified": 0,
+  "windows_tested": false,
+  "paid_actions": 0
+}

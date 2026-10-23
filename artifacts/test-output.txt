@@ -1,0 +1,34 @@
+test_budget_pause_reason_persists_in_queue (test_workbench.BudgetQueuePauseTests.test_budget_pause_reason_persists_in_queue) ... ok
+test_actual_exceeds_estimate_freezes_confirmation (test_workbench.BudgetTests.test_actual_exceeds_estimate_freezes_confirmation) ... ok
+test_beijing_midnight_requires_new_confirmation (test_workbench.BudgetTests.test_beijing_midnight_requires_new_confirmation) ... ok
+test_concurrent_account_tasks_atomic_limit (test_workbench.BudgetTests.test_concurrent_account_tasks_atomic_limit) ... ok
+test_unknown_baseline_and_overspend (test_workbench.BudgetTests.test_unknown_baseline_and_overspend) ... ok
+test_unknown_reconcile_blocks_retry (test_workbench.BudgetTests.test_unknown_reconcile_blocks_retry) ... ok
+test_receipt_settles_and_disconnected_no_charge (test_workbench.PaidGatewayTests.test_receipt_settles_and_disconnected_no_charge) ... ok
+test_result_unknown_never_retries (test_workbench.PaidGatewayTests.test_result_unknown_never_retries) ... ok
+test_old_cli_is_not_silently_downgraded (test_workbench.SubscriptionCommandTests.test_old_cli_is_not_silently_downgraded) ... ok
+test_subscription_command_isolated_and_mocked_only (test_workbench.SubscriptionCommandTests.test_subscription_command_isolated_and_mocked_only) ... ok
+test_api_auth_status_never_connected (test_workbench.SubscriptionTests.test_api_auth_status_never_connected) ... ok
+test_api_env_rejected (test_workbench.SubscriptionTests.test_api_env_rejected) ... ok
+test_no_exec_without_explicit_enable (test_workbench.SubscriptionTests.test_no_exec_without_explicit_enable) ... ok
+test_20_company_end_to_end_refill_and_surplus (test_workbench.WorkbenchTests.test_20_company_end_to_end_refill_and_surplus) ... ok
+test_auth_permissions_credits_unknown_fail_closed (test_workbench.WorkbenchTests.test_auth_permissions_credits_unknown_fail_closed) ... ok
+test_concurrent_task_lease (test_workbench.WorkbenchTests.test_concurrent_task_lease) ... ok
+test_export_readback_reconciles_and_no_overwrite (test_workbench.WorkbenchTests.test_export_readback_reconciles_and_no_overwrite) ... ok
+test_hard_crash_after_page_checkpoint_recovery (test_workbench.WorkbenchTests.test_hard_crash_after_page_checkpoint_recovery) ... ok
+test_historical_and_cross_task_dedupe_original_preserved (test_workbench.WorkbenchTests.test_historical_and_cross_task_dedupe_original_preserved) ... ok
+test_insufficient_and_empty_never_complete (test_workbench.WorkbenchTests.test_insufficient_and_empty_never_complete) ... ok
+test_killed_lease_expires_no_double_claim (test_workbench.WorkbenchTests.test_killed_lease_expires_no_double_claim) ... ok
+test_no_unreviewed_email_or_evidence_mismatch (test_workbench.WorkbenchTests.test_no_unreviewed_email_or_evidence_mismatch) ... ok
+test_normalize (test_workbench.WorkbenchTests.test_normalize) ... ok
+test_pause_during_fetch_discards_uncommitted_result (test_workbench.WorkbenchTests.test_pause_during_fetch_discards_uncommitted_result) ... ok
+test_pause_persists_restart_and_resume (test_workbench.WorkbenchTests.test_pause_persists_restart_and_resume) ... ok
+test_prompt_injection_treated_as_text_and_formula_escaped (test_workbench.WorkbenchTests.test_prompt_injection_treated_as_text_and_formula_escaped) ... ok
+test_retry_backoff_finite (test_workbench.WorkbenchTests.test_retry_backoff_finite) ... ok
+test_single_instance_and_force_kill_release (test_workbench.WorkbenchTests.test_single_instance_and_force_kill_release) ... ok
+test_unexpected_error_does_not_leak (test_workbench.WorkbenchTests.test_unexpected_error_does_not_leak) ... ok
+
+----------------------------------------------------------------------
+Ran 29 tests in 0.259s
+
+OK
