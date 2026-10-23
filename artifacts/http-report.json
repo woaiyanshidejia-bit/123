@@ -1,6 +1,6 @@
 {
-  "version": "1.1.0",
-  "checked_at": "2026-10-23T10:33:01.046689+00:00",
+  "version": "1.2.0",
+  "checked_at": "2026-10-23T11:08:03.878358+00:00",
   "csp_bypass": false,
   "standard_csp_real_ui_flow": "PASS",
   "inline_handlers_work": true,

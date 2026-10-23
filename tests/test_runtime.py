@@ -54,29 +54,26 @@ class RuntimeTests(unittest.TestCase):
     def connect(self):self.rt.connect('synthetic-fixture-key',self.config['account_label'],True)
     def settle(self,action):
         PaidGateway(self.store).reconcile_captured(action,1,beijing_day(),action+'-bill')
-    def test_real_adapter_pipeline_refill_surplus_recovery_and_export(self):
+    def capture_legacy(self,t,page=1):
+        from yingba.apollo import build_search_request,SEARCH_PATH
+        from yingba.paid import Observation
+        request=build_search_request(page,2,self.config['filters'])
+        envelope={'provider':'apollo','endpoint':SEARCH_PATH,'account_label':self.config['account_label'],'query':request}
+        gateway=PaidGateway(self.store,lambda action,bound:Observation(self.rt._client.search(bound['query'],authorized=True).to_payload()),verified=True)
+        with self.assertRaises(ConnectionPause):gateway.execute(f'apollo:{t}:page:{page}',2,envelope)
+    def test_legacy_reconciled_cache_recovers_but_new_network_requires_cost_policy(self):
         t=self.create();self.connect();Budget(self.store).confirm(0)
-        self.assertFalse(self.engine.step(t))
-        pending=PaidGateway(self.store).pending();self.assertEqual(pending[0]['response_saved'],1)
-        self.assertEqual(self.engine.counts(t)['合格有邮箱'],0)
-        self.assertEqual(len(Client.calls),1)
-        self.settle(pending[0]['action'])
-        # Restart loses key but durable reconciled search response can be replayed.
+        self.capture_legacy(t);self.settle(PaidGateway(self.store).pending()[0]['action'])
         fresh=Runtime(Store(self.store.path),client_factory=Client,verifier=PublicVerifier(Fetcher()),reviewer=Reviewer())
-        e=Engine(fresh.store,source_factory=fresh.source_for_task);e.resume(t)
-        self.assertTrue(e.step(t));self.assertEqual(len(Client.calls),1)
-        e.step(t);e.step(t)
+        e=Engine(fresh.store,source_factory=fresh.source_for_task);e.run(t)
         self.assertEqual(e.counts(t)['合格有邮箱'],2)
-        self.assertFalse(e.step(t));self.assertEqual(len(Client.calls),1)
+        self.assertEqual(len(Client.calls),1)
         fresh.connect('synthetic-fixture-key',self.config['account_label'],True)
-        Budget(self.store).confirm(1);e.resume(t);e.step(t)
-        self.assertEqual(len(Client.calls),2)
-        self.settle(PaidGateway(self.store).pending()[0]['action'])
         e.resume(t);e.run(t)
-        self.assertEqual(e.counts(t)['合格有邮箱'],4)
-        self.assertEqual(self.store.rows('SELECT status FROM tasks')[0]['status'],'complete')
+        self.assertEqual(len(Client.calls),1)
+        self.assertIn('费用评估',self.store.rows('SELECT reason FROM tasks')[0]['reason'])
         p,_=export(self.store,t,self.root/'exports');w=load_workbook(p)
-        self.assertEqual(w['公司总表'].max_row-1,4);self.assertEqual(w['唯一邮箱清单'].max_row-1,4);w.close()
+        self.assertEqual(w['公司总表'].max_row-1,2);w.close()
         self.assertNotIn('synthetic-fixture-key',Path(self.store.path).read_bytes().decode('latin1'))
     def test_no_downstream_acceptance_means_no_paid_request(self):
         self.rt.reviewer.preflight=lambda:{'connected':False,'reason':'需要本人订阅验收'}
@@ -100,8 +97,8 @@ class RuntimeTests(unittest.TestCase):
         got=json.loads(Store(self.store.path).rows('SELECT config FROM task_settings')[0]['config'])
         self.assertEqual(got,self.config)
     def test_response_cannot_auto_settle_or_retry(self):
-        t=self.create();self.connect();Budget(self.store).confirm(0);self.engine.step(t)
-        self.engine.resume(t);self.engine.step(t)
+        t=self.create();self.connect();Budget(self.store).confirm(0);self.capture_legacy(t)
+        self.engine.step(t);self.engine.resume(t);self.engine.step(t)
         self.assertEqual(len(Client.calls),1)
         self.assertEqual(self.store.rows('SELECT status FROM charges')[0]['status'],'unknown')
         self.assertEqual(self.store.rows('SELECT page FROM tasks')[0]['page'],1)
@@ -113,7 +110,7 @@ class RuntimeTests(unittest.TestCase):
             return original(gateway,*args)
         with patch('yingba.runtime.PaidGateway.execute',switch):self.engine.step(t)
         self.assertEqual(Client.calls,[])
-        self.assertEqual(self.store.rows('SELECT status FROM charges')[0]['status'],'unknown')
+        self.assertEqual(self.store.rows('SELECT * FROM charges'),[])
     def test_midnight_between_reservation_and_send_blocks_network(self):
         t=self.create();self.connect();Budget(self.store).confirm(0)
         with patch('yingba.runtime.beijing_day',return_value='2099-01-01'):self.engine.step(t)

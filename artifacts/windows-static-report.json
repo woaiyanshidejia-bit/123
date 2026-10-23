@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-23T10:15:15.435238+00:00",
+  "checked_at": "2026-10-23T11:05:22.774771+00:00",
   "status": "passed",
   "scope": "Cloud static checks and optional host path smoke; not Windows acceptance",
   "launchers": {

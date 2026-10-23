@@ -5,12 +5,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import socket
 import ssl
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
-from yingba.apollo import (ApolloClient, ApolloPause, ApolloUnknown, HOST, SEARCH_PATH,
+from yingba.apollo import (ApolloClient, ApolloPause, ApolloUnknown, ApolloResponseCapture, HOST, SEARCH_PATH,
                           HEALTH_PATH, CREDIT_PATH, MAX_RESPONSE, build_search_request,
                           parse_search_response, request_fingerprint)
 
@@ -289,7 +291,7 @@ class ApolloTransportTests(unittest.TestCase):
 
     def test_bad_pagination_cannot_claim_empty_success(self):
         cases = []
-        for key, value in (("page", 2), ("per_page", 3), ("total_entries", -1), ("total_pages", 0), ("page", True)):
+        for key, value in (("page", 2), ("per_page", 3), ("total_entries", -1), ("total_entries", 1), ("total_pages", 0), ("page", True)):
             raw = response()
             raw["pagination"][key] = value
             cases.append(raw)
@@ -321,12 +323,92 @@ class ApolloTransportTests(unittest.TestCase):
         self.reply["partial_results_only"] = True
         self.assertEqual(self.search().terminal_reason, "apollo_partial_results_limit")
 
-    def test_unsupported_saved_account_shape_cannot_be_silently_dropped(self):
+    def test_mixed_response_is_captured_instead_of_dropped_or_counted(self):
         self.reply["accounts"] = [{"id": "synthetic-saved-account", "name": "模拟已保存公司"}]
-        with self.assertRaises(ApolloUnknown) as caught:
-            self.search()
-        self.assertEqual(caught.exception.code, "account_schema_unverified")
+        capture = self.search()
+        self.assertIsInstance(capture, ApolloResponseCapture)
+        payload = capture.to_payload()
+        self.assertEqual(payload["response_state"], "schema_review_required")
+        self.assertEqual(payload["blocking_code"], "mixed_accounts_page_size_mismatch")
+        self.assertIsNone(payload["records"])
+        self.assertIsNone(payload["exhausted"])
+        self.assertEqual(payload["raw"], self.reply)
+        self.assertEqual(payload["observed_candidate_count"], 3)
+        self.assertEqual(len(payload["review_candidates"]), 3)
+        self.assertEqual(payload, capture.to_payload())
         self.assertEqual(len(self.calls), 1)
+
+    def test_mixed_response_within_page_bound_still_does_not_guess_pagination(self):
+        self.reply["organizations"] = self.reply["organizations"][:1]
+        self.reply["accounts"] = [{"id": "synthetic-account", "organization_id": "synthetic-organization",
+                                   "domain": "saved.example", "name": "模拟已保存公司"}]
+        payload = self.search().to_payload()
+        self.assertEqual(payload["blocking_code"], "mixed_accounts_pagination_unverified")
+        self.assertFalse(payload["pagination_verified"])
+        self.assertEqual(payload["observed_candidate_count"], 2)
+        account = payload["review_candidates"][1]
+        self.assertEqual(account["account_id"], "synthetic-account")
+        self.assertEqual(account["organization_id"], "synthetic-organization")
+        self.assertEqual(account["apollo_id"], "synthetic-organization")
+        self.assertEqual(account["domain"], "saved.example")
+        self.assertIsNone(payload["actual_points"])
+
+    def test_mixed_incomplete_or_unstructured_records_remain_recoverable(self):
+        self.reply["organizations"] = []
+        self.reply["accounts"] = [{"id": "account-only", "name": "公司名称"}, {}, "opaque-observation"]
+        payload = self.search().to_payload()
+        self.assertEqual(payload["raw"], self.reply)
+        self.assertEqual(len(payload["review_candidates"]), 3)
+        account = payload["review_candidates"][0]
+        self.assertEqual(account["account_id"], "account-only")
+        self.assertEqual(account["apollo_id"], "")
+        self.assertEqual(account["domain"], "")
+        self.assertEqual(payload["review_candidates"][1]["raw_record"], {})
+        self.assertEqual(payload["review_candidates"][2]["parse_problem"], "row_not_object")
+        self.assertIsNone(payload["records"])
+
+    def test_received_bad_pagination_json_is_preserved_for_offline_review(self):
+        self.reply["pagination"]["page"] = 99
+        payload = self.search().to_payload()
+        self.assertEqual(payload["response_state"], "schema_review_required")
+        self.assertEqual(payload["blocking_code"], "response_invalid")
+        self.assertEqual(payload["raw"]["pagination"]["page"], 99)
+        self.assertIsNone(payload["records"])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_mixed_raw_response_survives_gateway_restart_and_billing_reconciliation(self):
+        from yingba.adapters import UnknownOutcome
+        from yingba.budget import Budget, BudgetPause, beijing_day
+        from yingba.db import Store
+        from yingba.paid import Observation, PaidGateway
+
+        self.reply["accounts"] = [{"id": "account-synthetic", "name": "模拟公司", "echo": FAKE_KEY}]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "capture.sqlite"
+            store = Store(path)
+            Budget(store).confirm(0)
+            gateway = PaidGateway(store, lambda action, request: Observation(self.client.search(request, authorized=True).to_payload()), verified=True)
+            with self.assertRaises(UnknownOutcome):
+                gateway.execute("mixed-response-capture", 1, self.request)
+            captured = store.rows("SELECT payload FROM paid_observations WHERE action=?", ("mixed-response-capture",))[0]["payload"]
+            self.assertNotIn(FAKE_KEY, captured)
+            stored = json.loads(captured)
+            self.assertEqual(stored["raw"]["accounts"][0]["echo"], "[REDACTED]")
+            self.assertEqual(stored["observed_candidate_count"], 3)
+            self.assertEqual(len(self.calls), 1)
+
+            def forbidden_retry(action, request):
+                self.fail("already observed paid request must not be repeated")
+
+            resumed = PaidGateway(Store(path), forbidden_retry, verified=True)
+            with self.assertRaises(BudgetPause):
+                resumed.execute("mixed-response-capture", 1, self.request)
+            recovered = resumed.reconcile_captured("mixed-response-capture", 1, beijing_day(), "SIMULATED-BILLING-RECEIPT")
+            self.assertEqual(recovered["response_state"], "schema_review_required")
+            self.assertIsNone(recovered["records"])
+            self.assertIsNone(recovered["exhausted"])
+            self.assertEqual(resumed.execute("mixed-response-capture", 1, self.request), recovered)
+            self.assertEqual(len(self.calls), 1)
 
 
 if __name__ == "__main__":

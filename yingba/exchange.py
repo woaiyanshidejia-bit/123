@@ -10,7 +10,7 @@ from openpyxl.styles import Font,PatternFill
 from .engine import stamp,event,qualified_count,QUALIFIED_ROWS
 from .normalize import keys,email,cell,source_emails
 
-DEFAULT_MAPPING={'name':'公司名称','domain':'域名','apollo_id':'Apollo ID','email':'邮箱'}
+DEFAULT_MAPPING={'name':'公司名称','domain':'域名','apollo_id':'Apollo ID','apollo_account_id':'Apollo Account ID','email':'邮箱'}
 def import_history(store,path,mapping=None):
     """Read only, no writes to historical original. Ambiguous headers fail closed."""
     path=Path(path); mapping=DEFAULT_MAPPING if mapping is None else mapping
@@ -38,7 +38,7 @@ def import_history(store,path,mapping=None):
         named_headers=[value for value in header if value is not None and value!='']
         if len(named_headers)!=len(set(named_headers)):raise ValueError('历史表含重复列名，请调整字段映射')
         indexes={k:header.index(v) for k,v in mapping.items() if v in header}
-        if not any(k in indexes for k in ('name','domain','apollo_id','email')):raise ValueError('未找到可去重字段，请配置字段映射')
+        if not any(k in indexes for k in DEFAULT_MAPPING):raise ValueError('未找到可去重字段，请配置字段映射')
         count=0
         with store.transaction() as db:
             # Content and field mapping jointly identify an import. A corrected
@@ -97,15 +97,18 @@ def export(store,task,directory):
     grouped={}
     for r in rows:grouped.setdefault(r['id'],[]).append(r)
     wb=Workbook(); companies=wb.active;companies.title='公司总表'
-    companies.append(['公司ID','公司名称','域名','Apollo ID','邮箱','来源URL','采集时间UTC','核验依据','状态'])
+    # Preserve existing column positions; account IDs get their own column and
+    # never replace organization IDs in the historical Apollo ID column.
+    companies.append(['公司ID','公司名称','域名','Apollo ID','邮箱','来源URL','采集时间UTC','核验依据','状态','Apollo Account ID'])
     for cid,rs in grouped.items():
-        r=rs[0];companies.append([cid,cell(r['name']),cell(r['domain']),cell(r['apollo']),cell('; '.join(x['address'] for x in rs)),cell('\n'.join(dict.fromkeys(x['url'] for x in rs))),cell('\n'.join(dict.fromkeys(x['evidence_time'] for x in rs))),cell('\n'.join(dict.fromkeys(x['basis'] for x in rs))),'模拟合格' if t['mode']=='simulation' else '公开核实；非投递验证'])
+        r=rs[0];record=json.loads(r['raw']);account=record.get('apollo_account_id') or record.get('account_id') or ''
+        companies.append([cid,cell(r['name']),cell(r['domain']),cell(r['apollo']),cell('; '.join(x['address'] for x in rs)),cell('\n'.join(dict.fromkeys(x['url'] for x in rs))),cell('\n'.join(dict.fromkeys(x['evidence_time'] for x in rs))),cell('\n'.join(dict.fromkeys(x['basis'] for x in rs))),'模拟合格' if t['mode']=='simulation' else '公开核实；非投递验证',cell(account)])
     sheet=wb.create_sheet('唯一邮箱清单');sheet.append(['邮箱','归属公司ID','公司名称','来源URL','采集时间UTC','核验依据'])
     by_address={}
     for r in rows:by_address.setdefault(r['address'],[]).append(r)
     for address,rs in by_address.items():sheet.append([cell(address),'; '.join(str(r['id']) for r in rs),cell('; '.join(r['name'] for r in rs)),cell('\n'.join(dict.fromkeys(r['url'] for r in rs))),cell('\n'.join(dict.fromkeys(r['evidence_time'] for r in rs))),cell('\n'.join(dict.fromkeys(r['basis'] for r in rs)))])
     meta=wb.create_sheet('导出说明');meta.append(['项目','值'])
-    for k,v in {'模式':'模拟数据，禁止作为真实客户使用' if t['mode']=='simulation' else '真实数据','任务ID':task,'目标':t['target'],'合格公司':len(grouped),'唯一邮箱':len(by_address),'任务状态':t['status'],'说明':'公开来源核实不等于实际投递验证；不含邮件内容；未审核不计达标','导出UTC':stamp()}.items():meta.append([k,v])
+    for k,v in {'模式':'模拟数据，禁止作为真实客户使用' if t['mode']=='simulation' else '真实数据','任务ID':task,'目标':t['target'],'合格公司':len(grouped),'唯一邮箱':len(by_address),'任务状态':t['status'],'说明':'公开来源核实不等于实际投递验证；不含邮件内容；未审核不计达标','ID说明':'Apollo ID为组织ID；Apollo Account ID为已保存公司账户ID，两种ID独立去重','导出UTC':stamp()}.items():meta.append([k,v])
     for ws in wb:
         ws.freeze_panes='A2';ws.auto_filter.ref=ws.dimensions
         for c in ws[1]:c.font=Font(color='FFFFFF',bold=True);c.fill=PatternFill('solid',fgColor='174A44')

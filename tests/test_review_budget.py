@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from yingba.adapters import UnknownOutcome
 from yingba.budget import Budget, BudgetPause, beijing_day
-from yingba.db import Store
+from yingba.db import Store, SCHEMA_VERSION
 from yingba.paid import Observation, PaidGateway, Receipt
 
 
@@ -315,7 +315,7 @@ CREATE TABLE paid_results(action TEXT PRIMARY KEY REFERENCES charges(action),req
             gateway.reconcile('unknown', {'page': 9}, Receipt({}, 0, 'guess'))
         self.assertEqual(len(store.rows('SELECT * FROM paid_requests')), 1)
         Budget(store).settle('unknown', 0)
-        self.assertEqual(store.rows('PRAGMA user_version')[0]['user_version'], 2)
+        self.assertEqual(store.rows('PRAGMA user_version')[0]['user_version'], SCHEMA_VERSION)
         Store(path)
         self.assertEqual(len(store.rows('SELECT * FROM paid_requests')), 1)
 

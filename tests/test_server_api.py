@@ -57,6 +57,11 @@ class ServerAPITests(unittest.TestCase):
     def test_nonexistent_task_never_reports_success(self):
         for path in ['/api/pause','/api/resume']:
             self.assertEqual(self.post(path,{'task':'absent'})[0],400)
+    def test_download_rejects_windows_drive_and_alternate_stream_paths(self):
+        for path in ('C:private.json','safe.xlsx:secret','%00report.xlsx','..%5Cprivate.json'):
+            with self.subTest(path=path),self.assertRaises(urllib.error.HTTPError) as caught:
+                urllib.request.urlopen(self.url+'/download/'+path)
+            self.assertEqual(caught.exception.code,400)
     def test_live_and_subscription_calls_require_explicit_authorization(self):
         self.assertEqual(self.post('/api/connect',{'api_key':'synthetic','account_label':'fixture','authorized':False})[0],409)
         self.assertEqual(self.post('/api/codex/validate',{'authorized':False})[0],409)

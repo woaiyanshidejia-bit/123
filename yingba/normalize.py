@@ -60,7 +60,7 @@ def source_emails(text):
     return addresses
 
 def keys(record):
-    return [(k,v) for k,v in [('domain',domain(record.get('domain'))),('apollo',str(record.get('apollo_id') or '').strip().casefold()),('name',name(record.get('name'))) ] if v]
+    return [(k,v) for k,v in [('domain',domain(record.get('domain'))),('apollo',str(record.get('apollo_id') or '').strip().casefold()),('apollo_account',str(record.get('apollo_account_id') or record.get('account_id') or '').strip().casefold()),('name',name(record.get('name'))) ] if v]
 
 def cell(value):
     value = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]','',str(value if value is not None else ''))

@@ -1,20 +1,26 @@
 """Official Apollo HTTP transport; disabled until explicitly configured.
 
-This module performs no calls on import. Search is a potentially paid operation:
+This module performs no calls on import. Organization Search is potentially paid:
 the caller must reserve its budget and persist an unknown-outcome marker BEFORE
 calling search(authorized=True). A response is not a billing receipt. In
-particular, documented prices and response headers never become actual_points.
+particular, its documented prices and response headers never become actual_points.
+The separate Accounts Search endpoint reads already-saved accounts and is
+documented as zero-credit; it never falls back to a paid search or enrichment.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import hashlib
 import http.client
+import ipaddress
 import json
 import math
 import re
+import socket
 import ssl
+import threading
+import time
 from urllib.parse import urlencode
 
 from .adapters import ConnectionPause, UnknownOutcome
@@ -22,6 +28,7 @@ from .normalize import domain
 
 HOST = "api.apollo.io"
 SEARCH_PATH = "/api/v1/mixed_companies/search"
+ACCOUNTS_PATH = "/api/v1/accounts/search"
 HEALTH_PATH = "/api/v1/auth/health"
 CREDIT_PATH = "/api/v1/usage_stats/credit_usage_stats"
 MAX_RESPONSE = 4 * 1024 * 1024
@@ -46,6 +53,8 @@ LIST_FILTERS = {
     "not_organization_websites_list": 1000,
 }
 TEXT_FILTERS = {"q_organization_name"}
+ACCOUNT_LIST_FILTERS = {"account_stage_ids", "account_label_ids"}
+ACCOUNT_SORT_FIELDS = {"account_last_activity_date", "account_created_at", "account_updated_at"}
 
 
 class ApolloPause(ConnectionPause):
@@ -121,6 +130,41 @@ def build_search_request(page: int, per_page: int = 100, filters: dict | None = 
     return result
 
 
+def build_accounts_request(page: int, per_page: int = 100, filters: dict | None = None) -> dict:
+    """Canonical official JSON body for the zero-credit saved-accounts search.
+
+    Empty filters mean all already-saved accounts, not Apollo's company database.
+    Account name matching is not an industry/business-activity search.
+    """
+    result = {"page": _integer(page, 1, 500, "Apollo 页码"),
+              "per_page": _integer(per_page, 1, 100, "每页公司数")}
+    if filters is None:
+        filters = {}
+    if not isinstance(filters, dict) or any(not isinstance(key, str) for key in filters):
+        raise ValueError("已保存公司筛选条件必须为文本字段字典")
+    for key, value in sorted(filters.items()):
+        if key == "q_organization_name":
+            result[key] = _filter_text(value)
+        elif key in ACCOUNT_LIST_FILTERS:
+            if not isinstance(value, (list, tuple)) or len(value) > 1000:
+                raise ValueError("Apollo 已保存公司标签或阶段必须为有限 ID 数组")
+            if value:
+                result[key] = sorted({_filter_text(item) for item in value})
+        elif key == "sort_by_field":
+            if not isinstance(value, str) or value not in ACCOUNT_SORT_FIELDS:
+                raise ValueError("不支持的 Apollo 已保存公司排序字段")
+            result[key] = value
+        elif key == "sort_ascending":
+            if type(value) is not bool:
+                raise ValueError("Apollo 排序方向必须为布尔值")
+            result[key] = value
+        else:
+            raise ValueError("已保存公司读取不支持此字段，不会改用收费搜索")
+    if "sort_ascending" in result and "sort_by_field" not in result:
+        raise ValueError("指定排序方向时必须同时指定排序字段")
+    return result
+
+
 def request_fingerprint(request: dict) -> str:
     return hashlib.sha256(json.dumps(request, ensure_ascii=False, sort_keys=True,
                                      separators=(",", ":"), allow_nan=False).encode()).hexdigest()
@@ -156,7 +200,150 @@ class ApolloPage:
         }
 
 
-def parse_search_response(raw: dict, request: dict, *, provider_request_id=None) -> ApolloPage:
+@dataclass(frozen=True)
+class ApolloAccountsPage(ApolloPage):
+    """A documented-free saved-account result, not a global database search."""
+
+    def to_payload(self) -> dict:
+        payload = super().to_payload()
+        payload.update({
+            "provenance": "saved_accounts",
+            "source_url": f"https://{HOST}{ACCOUNTS_PATH}",
+            "billing_status": "documented_free",
+            "actual_points": 0,
+            "documented_estimate_points": 0,
+            "billing_note": "官方列示零积分，只读已有公司；仍须现有账号具备端点权限",
+        })
+        return payload
+
+
+@dataclass(frozen=True)
+class ApolloResponseCapture:
+    """An observed JSON response requiring schema review, never a usable page.
+
+    Keep received paid results recoverable through the existing Observation
+    store. None deliberately fails the runtime's list/bool page contract, even
+    if billing is subsequently reconciled. This object never implies success.
+    """
+    raw: dict
+    request: dict
+    blocking_code: str
+    blocking_reason: str
+    provider_request_id: str | None = None
+    collected: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def to_payload(self) -> dict:
+        review_candidates = []
+        for source_array in ("organizations", "accounts"):
+            rows = self.raw.get(source_array)
+            if not isinstance(rows, list):
+                continue
+            for row in rows:
+                # Provisional field views aid offline review; they are not
+                # released to Engine as company records until contract review.
+                view = {"source_array": source_array, "raw_record": row}
+                if isinstance(row, dict):
+                    def text_field(field):
+                        value = row.get(field)
+                        return value.strip() if isinstance(value, str) else ""
+                    account = source_array == "accounts"
+                    organization_id = text_field("organization_id") if account else text_field("id")
+                    view.update({
+                        "name": text_field("name"),
+                        "domain": domain(text_field("domain") if account else
+                                         (text_field("primary_domain") or text_field("website_url"))),
+                        "account_id": text_field("id") if account else "",
+                        "organization_id": organization_id,
+                        "apollo_id": organization_id,
+                    })
+                else:
+                    view["parse_problem"] = "row_not_object"
+                review_candidates.append(view)
+        return {
+            "response_state": "schema_review_required",
+            "blocking_code": self.blocking_code,
+            "blocking_reason": self.blocking_reason,
+            "blocking_message": self.blocking_reason,
+            "records": None,
+            "exhausted": None,
+            "pagination_verified": False,
+            "pagination": self.raw.get("pagination"),
+            "raw": self.raw,
+            "review_candidates": review_candidates,
+            "observed_candidate_count": len(review_candidates),
+            "requested_per_page": self.request["per_page"],
+            "collected": self.collected,
+            "request_fingerprint": request_fingerprint(self.request),
+            "provider_request_id": self.provider_request_id,
+            "source_url": f"https://{HOST}{SEARCH_PATH}",
+            "billing_status": "unconfirmed",
+            "actual_points": None,
+            "documented_estimate_points": 1,
+            "billing_note": "已收到的响应须先保存；费用对账与响应结构验收分别处理，禁止重发原动作",
+        }
+
+
+def parse_accounts_response(raw: dict, request: dict, *, provider_request_id=None) -> ApolloAccountsPage:
+    """Keep all account candidates, with account/organization IDs kept separate."""
+    def invalid():
+        raise ApolloPause("accounts_response_invalid", "Apollo 已保存公司响应结构或分页无法核对，已暂停")
+
+    if not isinstance(raw, dict) or raw.get("error") or raw.get("error_details") or raw.get("success") is False:
+        invalid()
+    rows, pagination = raw.get("accounts"), raw.get("pagination")
+    if not isinstance(rows, list) or not isinstance(pagination, dict):
+        invalid()
+    if len(rows) > request["per_page"] or any(not isinstance(row, dict) for row in rows):
+        invalid()
+    if raw.get("organizations"):
+        invalid()
+    for key in ("page", "per_page", "total_entries", "total_pages"):
+        if type(pagination.get(key)) is not int or pagination[key] < 0:
+            invalid()
+    if pagination["page"] != request["page"] or pagination["per_page"] != request["per_page"]:
+        invalid()
+    page, per_page = pagination["page"], pagination["per_page"]
+    total, pages = pagination["total_entries"], pagination["total_pages"]
+    # An explicit total must agree with every page and its observed row count.
+    # Otherwise e.g. total=1000/pages=1 could silently stop after two rows.
+    # A short middle page or a partial-results marker is not proof of exhaustion.
+    if raw.get("partial_results_only", False) is not False:
+        invalid()
+    expected_pages = (total + per_page - 1) // per_page
+    if total == 0:
+        if page != 1 or pages not in (0, 1) or rows:
+            invalid()
+    elif pages != expected_pages or page > pages:
+        invalid()
+    expected_rows = min(per_page, max(0, total - (page - 1) * per_page))
+    if len(rows) != expected_rows:
+        invalid()
+    exhausted = total == 0 or page >= min(pages, 500)
+    reason = "apollo_page_limit" if page == 500 and pages > 500 else ("saved_accounts_exhausted" if exhausted else "")
+    records = []
+    collected = datetime.now(timezone.utc).isoformat()
+    for row in rows:
+        def text_field(field):
+            value = row.get(field)
+            return value.strip() if isinstance(value, str) else ""
+        organization_id = text_field("organization_id")
+        records.append({
+            "name": text_field("name"),
+            "domain": domain(text_field("domain")),
+            "account_id": text_field("id"),
+            "organization_id": organization_id,
+            "apollo_id": organization_id,
+            "website_url": text_field("website_url"),
+            "provenance": "saved_accounts",
+            "apollo_raw": row,
+            "source_url": f"https://{HOST}{ACCOUNTS_PATH}",
+            "collected": collected,
+        })
+    return ApolloAccountsPage(records, exhausted, reason, dict(pagination), raw, collected,
+                              request_fingerprint(request), provider_request_id)
+
+
+def parse_search_response(raw: dict, request: dict, *, provider_request_id=None) -> ApolloPage | ApolloResponseCapture:
     """Parse Apollo's documented organizations/pagination response shape.
 
     Malformed pagination is never treated as an empty, successful search.
@@ -167,15 +354,26 @@ def parse_search_response(raw: dict, request: dict, *, provider_request_id=None)
 
     if not isinstance(raw, dict) or raw.get("error") or raw.get("error_details") or raw.get("success") is False:
         invalid()
+    accounts = raw.get("accounts", [])
+    if not isinstance(accounts, list):
+        return ApolloResponseCapture(raw, request, "mixed_accounts_structure_invalid",
+            "Apollo 返回的 accounts 不是已核对的数组；原始响应已接收，须保存并核对结构，禁止重发", provider_request_id)
+    if accounts:
+        # The Organization Search OpenAPI gives accounts only {type: array};
+        # unlike Accounts Search, neither items nor mixed pagination is defined.
+        # Count ALL observations conservatively, but do not infer page meaning.
+        organizations = raw.get("organizations")
+        observed_count = len(accounts) + (len(organizations) if isinstance(organizations, list) else 0)
+        oversized = observed_count > request["per_page"]
+        code = "mixed_accounts_page_size_mismatch" if oversized else "mixed_accounts_pagination_unverified"
+        reason = ("Apollo 两个数组的候选总数超过请求每页上限；" if oversized else "Apollo 混合公司/账户的分页统计语义未获官方契约确认；")
+        return ApolloResponseCapture(raw, request, code,
+            reason + "原始响应须保存待结构核对，费用结算后仍不推进页码或计入达标，禁止重发", provider_request_id)
     rows, pagination = raw.get("organizations"), raw.get("pagination")
     if not isinstance(rows, list) or not isinstance(pagination, dict):
         invalid()
     if len(rows) > request["per_page"] or any(not isinstance(row, dict) for row in rows):
         invalid()
-    if raw.get("accounts"):
-        # Organization Search can include an accounts array. Its object contract
-        # is not specified by this endpoint; never silently discard paid results.
-        raise ApolloUnknown("account_schema_unverified", "Apollo 返回已保存账户记录，当前对象结构未核验；保留付费动作待对账，不重发")
     for key in ("page", "per_page", "total_entries", "total_pages"):
         if type(pagination.get(key)) is not int or pagination[key] < 0:
             invalid()
@@ -186,6 +384,8 @@ def parse_search_response(raw: dict, request: dict, *, provider_request_id=None)
     if (total == 0 and (rows or pages > 1)) or (total > 0 and pages == 0):
         invalid()
     if not rows and total > (page - 1) * per_page and page <= pages:
+        invalid()
+    if rows and (page > pages or total < (page - 1) * per_page + len(rows)):
         invalid()
     exhausted = total == 0 or page >= min(pages, 500)
     limited = page == 500 and pages > 500
@@ -209,6 +409,76 @@ def parse_search_response(raw: dict, request: dict, *, provider_request_id=None)
         })
     return ApolloPage(records, exhausted, reason, dict(pagination), raw, collected,
                       request_fingerprint(request), provider_request_id)
+
+
+def validate_bounded_search_payload(payload, request) -> bool:
+    """Fail-closed predicate for a complete Organization Search observation.
+
+    Reparse the raw response bound to the canonical original query, then compare
+    the entire generated payload rather than trusting a records/list flag. This
+    verifies consistency, not provider authenticity or an actual billing charge:
+    transport TLS and the gateway's durable response digest still supply those
+    respective transport/storage boundaries. No network calls occur here.
+    """
+    try:
+        if not isinstance(payload, dict) or not isinstance(request, dict):
+            return False
+        filters = {key: value for key, value in request.items() if key not in {"page", "per_page"}}
+        canonical = build_search_request(request.get("page"), request.get("per_page"), filters)
+        if canonical != request:
+            return False
+        if payload.get("request_fingerprint") != request_fingerprint(canonical):
+            return False
+        if payload.get("source_url") != f"https://{HOST}{SEARCH_PATH}":
+            return False
+        if payload.get("billing_status") != "unconfirmed" or payload.get("actual_points") is not None:
+            return False
+        if "response_state" in payload or type(payload.get("exhausted")) is not bool:
+            return False
+        if not isinstance(payload.get("records"), list) or not isinstance(payload.get("pagination"), dict):
+            return False
+        collected = payload.get("collected")
+        if not isinstance(collected, str):
+            return False
+        timestamp = datetime.fromisoformat(collected)
+        if timestamp.utcoffset() is None or timestamp.utcoffset().total_seconds() != 0:
+            return False
+        request_id = payload.get("provider_request_id")
+        if request_id is not None and (not isinstance(request_id, str) or
+                re.fullmatch(r"[A-Za-z0-9._:-]{1,200}", request_id) is None):
+            return False
+        parsed = parse_search_response(payload.get("raw"), canonical, provider_request_id=request_id)
+        if type(parsed) is not ApolloPage:
+            return False
+        # Bounded automatic continuation requires an internally complete page.
+        # A partial-result marker, short intermediate page, or contradictory
+        # total/page count must remain observable but cannot authorize progress.
+        if parsed.raw.get("partial_results_only", False) is not False:
+            return False
+        pagination = parsed.pagination
+        total, pages = pagination["total_entries"], pagination["total_pages"]
+        page, per_page = pagination["page"], pagination["per_page"]
+        if total:
+            if pages != (total + per_page - 1) // per_page or page > pages:
+                return False
+        elif page != 1 or pages not in (0, 1):
+            return False
+        expected_count = min(per_page, max(0, total - (page - 1) * per_page))
+        if len(parsed.records) != expected_count:
+            return False
+        expected = parsed.to_payload()
+        expected["collected"] = collected
+        for record in expected["records"]:
+            record["collected"] = collected
+        # JSON comparison distinguishes booleans from integers and rejects
+        # nonfinite numbers; exact keys also reject injected success metadata.
+        encode = lambda value: json.dumps(value, ensure_ascii=False, sort_keys=True,
+                                           separators=(",", ":"), allow_nan=False)
+        return encode(payload) == encode(expected)
+    except Exception:
+        # Invalid or adversarial payloads must neither authorize progress nor
+        # leak the raw contents through exception diagnostics.
+        return False
 
 
 class ApolloClient:
@@ -248,10 +518,12 @@ class ApolloClient:
             return [self._redact(item) for item in value]
         return value
 
-    def _request(self, method: str, path: str, *, query=None, paid=False):
+    def _request(self, method: str, path: str, *, query=None, paid=False, json_body=None):
         self._require_ready()
-        if (method, path) not in {("POST", SEARCH_PATH), ("GET", HEALTH_PATH), ("POST", CREDIT_PATH)}:
+        if (method, path) not in {("POST", SEARCH_PATH), ("POST", ACCOUNTS_PATH), ("GET", HEALTH_PATH), ("POST", CREDIT_PATH)}:
             raise ApolloPause("endpoint_refused", "Apollo 请求不在官方固定接口清单内")
+        if json_body is not None and (method, path) != ("POST", ACCOUNTS_PATH):
+            raise ApolloPause("body_refused", "Apollo 请求体不属于已核对的只读接口")
         url_path = path
         if query:
             pairs = []
@@ -263,16 +535,92 @@ class ApolloClient:
             url_path += "?" + urlencode(pairs)
         if len(url_path) > 32000:
             raise ValueError("Apollo 搜索条件过长，请减少筛选项")
+        encoded_body = b"{}" if method == "POST" else None
+        if json_body is not None:
+            encoded_body = json.dumps(json_body, sort_keys=True, ensure_ascii=False,
+                                      separators=(",", ":"), allow_nan=False).encode("utf-8")
+            if len(encoded_body) > 32000:
+                raise ValueError("Apollo 已保存公司筛选条件过长，请减少筛选项")
+        # One wall-clock budget covers DNS, TCP/TLS, response headers and body.
+        # Socket inactivity timeouts alone do not stop a slow byte stream.
+        deadline = time.monotonic() + self.timeout
+        expired = threading.Event()
         conn = None
+        watchdog = None
+        active_sockets = []
+
+        def remaining():
+            value = deadline - time.monotonic()
+            if expired.is_set() or value <= 0:
+                raise TimeoutError('Apollo request deadline exceeded')
+            return value
+
+        def expire():
+            expired.set()
+            # getresponse() may hand ownership to HTTPResponse and clear
+            # conn.sock; retained references still interrupt its makefile reads.
+            sockets = list(active_sockets)
+            current = getattr(conn, 'sock', None)
+            if current is not None:
+                sockets.append(current)
+            for current in sockets:
+                try:
+                    current.shutdown(socket.SHUT_RDWR)
+                except (OSError, ValueError):
+                    pass
+            if conn is not None:
+                try:
+                    conn.close()
+                except (OSError, ValueError):
+                    pass
+
+        def bounded_connection(address, timeout=None, source_address=None):
+            # Preserve HTTPSConnection's original host/SNI and certificate
+            # verification. Only its TCP creation seam uses the resolved IP.
+            from .public_web import PublicFetcher
+            remaining()
+            records = PublicFetcher(resolver=socket.getaddrinfo).resolve(address[0], address[1], deadline)
+            remaining()  # A delayed DNS worker must never trigger a later send.
+            if not records:
+                raise OSError('empty DNS result')
+            family, kind, protocol, _, target = records[0]
+            if family not in (socket.AF_INET, socket.AF_INET6) or kind != socket.SOCK_STREAM:
+                raise OSError('unsupported DNS result')
+            numeric = ipaddress.ip_address(target[0])
+            if (numeric.version == 4) != (family == socket.AF_INET):
+                raise OSError('inconsistent DNS address')
+            # Direct numeric connect avoids a second unbounded getaddrinfo call
+            # inside socket.create_connection after the bounded DNS lookup.
+            sock = socket.socket(family, kind, protocol)
+            active_sockets.append(sock)
+            try:
+                sock.settimeout(remaining())
+                if source_address:
+                    sock.bind(source_address)
+                sock.connect(target)
+                sock.settimeout(remaining())  # TLS receives only time left.
+                return sock
+            except BaseException:
+                sock.close()
+                raise
         try:
             # http.client neither follows redirects nor consults proxy variables.
             conn = http.client.HTTPSConnection(HOST, timeout=self.timeout,
                                                 context=ssl.create_default_context())
-            conn.request(method, url_path, body=b"{}" if method == "POST" else None,
+            conn._create_connection = bounded_connection
+            watchdog = threading.Timer(remaining(), expire)
+            watchdog.daemon = True
+            watchdog.start()
+            remaining()
+            conn.request(method, url_path, body=encoded_body,
                          headers={"x-api-key": self.__api_key, "Accept": "application/json",
                                   "Content-Type": "application/json", "Cache-Control": "no-cache",
                                   "User-Agent": "YINGBA-Workbench/1"})
+            if conn.sock is not None:
+                active_sockets.append(conn.sock)
+            remaining()
             response = conn.getresponse()
+            remaining()
             status = response.status
             if status != 200:
                 codes = {
@@ -294,9 +642,20 @@ class ApolloClient:
                 if paid:
                     raise ApolloUnknown("http_unknown", "Apollo 服务器结果未知，已暂停；禁止盲目重试")
                 raise ApolloPause("http_error", "Apollo 连接检查失败，请稍后手动检查", status=status)
-            body = response.read(MAX_RESPONSE + 1)
-            if len(body) > MAX_RESPONSE:
-                raise ValueError("response too large")
+            chunks, size = [], 0
+            while True:
+                remaining()
+                chunk = response.read1(min(65536, MAX_RESPONSE + 1 - size))
+                remaining()
+                if not chunk:
+                    if response.length not in (None, 0):
+                        raise ValueError('incomplete response')
+                    break
+                chunks.append(chunk)
+                size += len(chunk)
+                if size > MAX_RESPONSE:
+                    raise ValueError("response too large")
+            body = b''.join(chunks)
             content_type = (response.getheader("Content-Type") or "").split(";", 1)[0].strip().lower()
             if content_type not in {"application/json", "text/json"}:
                 raise ValueError("unexpected content type")
@@ -307,7 +666,9 @@ class ApolloClient:
             request_id = response.getheader("X-Request-Id")
             if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9._:-]{1,200}", request_id) or self.__api_key in request_id:
                 request_id = None
-            return self._redact(data), request_id
+            redacted = self._redact(data)
+            remaining()
+            return redacted, request_id
         except (ApolloPause, ApolloUnknown):
             raise
         except Exception:
@@ -316,6 +677,8 @@ class ApolloClient:
                 raise ApolloUnknown("network_or_response_unknown", "Apollo 付费请求结果未知，已暂停；先对账，禁止自动重发") from None
             raise ApolloPause("connection_failed", "Apollo 连接检查未成功，请检查网络、登录及接口权限") from None
         finally:
+            if watchdog is not None:
+                watchdog.cancel()
             if conn is not None:
                 try:
                     conn.close()
@@ -342,7 +705,7 @@ class ApolloClient:
         return {"raw": data, "scope": "team_billing_cycle", "daily_used": None,
                 "collected": datetime.now(timezone.utc).isoformat()}
 
-    def search(self, request: dict, *, authorized=False) -> ApolloPage:
+    def search(self, request: dict, *, authorized=False) -> ApolloPage | ApolloResponseCapture:
         """Send exactly one paid request; caller owns the persisted budget guard.
 
         authorized=True means caller has already checked current authorization,
@@ -359,4 +722,26 @@ class ApolloClient:
         if canonical != request:
             raise ValueError("请使用 build_search_request 固定并规范化请求后再预留预算")
         data, request_id = self._request("POST", SEARCH_PATH, query=canonical, paid=True)
-        return parse_search_response(data, canonical, provider_request_id=request_id)
+        try:
+            return parse_search_response(data, canonical, provider_request_id=request_id)
+        except ApolloUnknown as error:
+            # A valid received JSON body must not disappear because schema
+            # validation failed. The existing Observation gateway persists it.
+            return ApolloResponseCapture(data, canonical, error.code,
+                "Apollo 响应已收到但结构校验未通过；保存原始响应核对，不能推进任务或重发", request_id)
+
+    def search_accounts(self, request: dict) -> ApolloAccountsPage:
+        """Read one zero-credit page of already-saved accounts; never enrich.
+
+        Enabling the client is still explicit. The caller persists page responses
+        and treats authentication/permission/rate-limit failures as pauses.
+        """
+        self._require_ready()
+        if not isinstance(request, dict):
+            raise ValueError("Apollo 已保存公司请求必须为字典")
+        filters = {k: v for k, v in request.items() if k not in {"page", "per_page"}}
+        canonical = build_accounts_request(request.get("page"), request.get("per_page"), filters)
+        if canonical != request:
+            raise ValueError("请使用 build_accounts_request 固定并规范化请求")
+        data, request_id = self._request("POST", ACCOUNTS_PATH, json_body=canonical, paid=False)
+        return parse_accounts_response(data, canonical, provider_request_id=request_id)

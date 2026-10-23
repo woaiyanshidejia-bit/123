@@ -1,0 +1,44 @@
+{
+  "version": "1.2.0",
+  "checked_at": "2026-10-23T11:12:24.467615+00:00",
+  "unit_tests": {
+    "count": 395,
+    "seconds": 18.736,
+    "result": "PASS",
+    "files": {
+      "test_apollo_bounded.py": 12,
+      "test_apollo_deadline.py": 7,
+      "test_apollo_free.py": 22,
+      "test_apollo_import.py": 27,
+      "test_apollo_transport.py": 29,
+      "test_bounded_budget.py": 38,
+      "test_bounded_runtime.py": 8,
+      "test_codex_costs.py": 24,
+      "test_codex_subscription.py": 28,
+      "test_cost_policy.py": 34,
+      "test_free_runtime.py": 25,
+      "test_review_budget.py": 26,
+      "test_review_data.py": 30,
+      "test_runtime.py": 13,
+      "test_server_api.py": 5,
+      "test_windows_launchers.py": 12,
+      "test_workbench.py": 55
+    }
+  },
+  "browser": "PASS: Chromium headless; standard CSP separately checked",
+  "windows_static_and_linux_special_paths": "PASS",
+  "real_windows": false,
+  "real_apollo": false,
+  "real_codex_subscription_exec": false,
+  "real_paid_actions": 0,
+  "real_customer_collection": 0,
+  "official_docs_read_via_web": "PASS",
+  "runtime_direct_official_docs_network": "BLOCKED: docs.apollo.io DNS resolution failed in cloud",
+  "unverified_external_conditions": [
+    "Windows10 CMD and Codex native sandbox",
+    "personal ChatGPT CLI login and structured runtime call",
+    "Apollo account key permissions and current tariff",
+    "real websites and evidence quality",
+    "direct HTTPS access to official cost documentation"
+  ]
+}

@@ -17,7 +17,8 @@ from .lock import InstanceLock
 from .budget import Budget, BudgetPause, beijing_day
 from .adapters import ConnectionPause
 from .paid import PaidGateway, valid_reference
-from .runtime import Runtime, settings
+from .runtime import Runtime, settings, append_import
+from .apollo_import import prepare_import
 
 ROOT=Path(__file__).parent
 
@@ -58,7 +59,9 @@ def serve(data,port=8765,open_browser=True):
                 if parsed.path.startswith('/download/'):
                     from urllib.parse import unquote
                     filename=unquote(parsed.path.removeprefix('/download/'))
-                    if '/' in filename or '\\' in filename or filename.startswith('.'):return self.send(400,{'error':'无效文件名'})
+                    if (not filename or '/' in filename or '\\' in filename or filename.startswith('.')
+                            or any(ord(c)<32 or c in ':<>"|?*' for c in filename)):
+                        return self.send(400,{'error':'无效文件名'})
                     path=data/'exports'/filename
                     if not path.is_file():return self.send(404,{'error':'文件不存在'})
                     return self.send(200,path.read_bytes(),'application/octet-stream')
@@ -74,6 +77,8 @@ def serve(data,port=8765,open_browser=True):
                         raise ValueError('任务不存在')
                     if action=='/api/create':
                         config=settings(r.get('settings')) if r.get('mode','real')=='real' else None
+                        if config and config['source']=='apollo_organizations' and not config.get('cost_policy_id'):
+                            raise ConnectionPause('新建全库公司搜索任务前，请完成Codex费用评估和今日预算授权')
                         result={'id':engine.create(r.get('target',1000),r.get('mode','real'),config=config)}
                     elif action=='/api/pause':engine.pause(r['task']);result={'ok':True}
                     elif action=='/api/resume':engine.resume(r['task']);result={'ok':True}
@@ -85,6 +90,8 @@ def serve(data,port=8765,open_browser=True):
                     elif action=='/api/budget/settle':
                         if r.get('confirmed') is not True:raise ValueError('须核实实际扣费和日期')
                         PaidGateway(store).reconcile_captured(r['action'],r['actual'],r['billed_day'],r['reference']);result={'ok':True}
+                    elif action=='/api/budget/settle-batch':
+                        result=PaidGateway(store).reconcile_verified_batch(r['actions'],r['actual_each'],r['billed_day'],r['reference'],confirmed_each=r.get('confirmed_each') is True)
                     elif action=='/api/budget/resolve-missing':
                         if r.get('confirmed') is not True or not str(r.get('reference','')).strip():raise ValueError('须核实实际扣费及动作专属依据')
                         valid_reference(r['reference'])
@@ -97,6 +104,23 @@ def serve(data,port=8765,open_browser=True):
                     elif action=='/api/connect':result=runtime.connect(r.get('api_key'),r.get('account_label'),r.get('authorized'))
                     elif action=='/api/disconnect':runtime.disconnect();result={'ok':True}
                     elif action=='/api/codex/validate':result=runtime.validate_codex(authorized=r.get('authorized') is True)
+                    elif action=='/api/cost/assess':
+                        if r.get('task'):
+                            rows=store.rows('SELECT config FROM task_settings WHERE task_id=?',(r['task'],))
+                            if not rows:raise ValueError('任务不存在或缺少搜索设置')
+                            config=json.loads(rows[0]['config'])
+                        else:config=settings(r.get('settings'))
+                        result=runtime.assess_cost(config,account_evidence=r.get('account_evidence'),authorized=r.get('authorized') is True)
+                        if r.get('task') and result.get('policy_id'):runtime.bind_cost_policy(r['task'],result)
+                    elif action=='/api/candidates/import':
+                        import base64
+                        raw=base64.b64decode(r['content'],validate=True)
+                        info=prepare_import(store,raw,r['filename'],r['source_url'],r.get('confirmed') is True,r.get('mapping'))
+                        if r.get('task'):
+                            result=append_import(engine,r['task'],info['batch_id'])
+                        else:
+                            config=settings({'source':'apollo_import','batch_id':info['batch_id']})
+                            result={'id':engine.create(r.get('target',1000),'real',config=config),'rows':info['rows'],'reason':'Apollo候选已保存，开始官网核实；导入不调用Apollo，也不采纳表中邮箱为合格证据'}
                     elif action=='/api/history':
                         import base64
                         raw=base64.b64decode(r['content'],validate=True)

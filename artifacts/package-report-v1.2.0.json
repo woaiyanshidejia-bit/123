@@ -1,0 +1,16 @@
+{
+  "archive": "YINGBA-Windows-v1.2.0.zip",
+  "archive_sha256": "8832e3447554f69d3c05d68991523cd3d7e329451cfeec9b0d545c4583f4b9e9",
+  "archive_bytes": 512079,
+  "entries": 69,
+  "manifest_files_verified": 68,
+  "fresh_venv_offline_install": "PASS",
+  "packaged_windows_static_check": "PASS",
+  "packaged_unit_tests": "PASS",
+  "test_count": 395,
+  "forbidden_runtime_or_auth_files": 0,
+  "host_platform": "linux",
+  "special_path_directory": "yingba-package-中文 空格 ! 100% & (OEM)^ aurf2dx6",
+  "windows_executed": false,
+  "cmd_execution_verified": false
+}

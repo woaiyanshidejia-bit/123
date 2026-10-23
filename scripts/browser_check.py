@@ -24,6 +24,7 @@ with tempfile.TemporaryDirectory() as tmp:
             context.route('**/*',lambda route:route.continue_() if route.request.url.startswith(url+'/') else route.abort())
             page=context.new_page();errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
             page.goto(url);page.get_by_role('button',name='任务设置',exact=True).click()
+            assert 'apollo_account_id' in page.locator('#mapping').input_value()
             page.locator('#target').fill('15');page.locator('#mode').select_option('simulation');page.get_by_role('button',name='创建并开始',exact=True).click()
             page.wait_for_function('state.tasks.length===1')
             page.get_by_role('button',name='概览',exact=True).click();page.get_by_role('button',name='暂停',exact=True).click()
@@ -54,12 +55,26 @@ with tempfile.TemporaryDirectory() as tmp:
             page.wait_for_function('state.tasks.some(t=>t.mode==="real"&&t.status==="paused")')
             real=next(t for t in page.evaluate('state.tasks') if t['mode']=='real')
             assert real['counts']['合格有邮箱']==0 and '未连接' in real['reason']
+            page.get_by_role('button',name='任务设置',exact=True).click()
+            page.locator('#sourceKind').select_option('apollo_organizations')
+            assert page.locator('#paidCost').is_visible() and not page.locator('#savedFilters').is_visible()
+            page.get_by_role('button',name='创建并开始',exact=True).click()
+            page.wait_for_function('document.querySelector("#message").textContent.includes("费用评估")')
+            page.get_by_role('button',name='用Codex评估并授权今日搜索',exact=True).click()
+            page.wait_for_function('document.querySelector("#feeResult").textContent.includes("未连接")')
+            assert len(page.evaluate('state.tasks'))==2
+            page.locator('#candidateFile').set_input_files({'name':'apollo-candidates.csv','mimeType':'text/csv','buffer':b'Company Name,Website\nSynthetic Company,synthetic.example\n'})
+            page.locator('#candidateUrl').fill('https://app.apollo.io/#/accounts')
+            page.locator('#candidateConfirmed').check()
+            page.get_by_role('button',name='导入并创建核实任务',exact=True).click()
+            page.wait_for_function('state.tasks.length===3')
+            assert page.evaluate('state.tasks.every(t=>t.mode!=="real"||t.counts["合格有邮箱"]===0)')
             page.get_by_role('button',name='概览',exact=True).click();page.screenshot(path='/tmp/yingba-ui-check.png',full_page=True)
             assert not errors,errors
             # HTTP security assertions from actual served origin.
             assert context.request.post(url+'/api/create',data={'target':1}).status==403
             assert context.request.get(url+'/api/state',headers={'Host':'evil.example'}).status==403
-            result={'version':'1.1.0','checked_at':datetime.now(timezone.utc).isoformat(),'browser':browser.version,'checks':['中文导航7页','创建模拟任务','暂停/继续','20家公司贯通及16合格','Excel下载','诊断状态','预算基线确认','真实模式未连接安全暂停','CSRF拒绝','Host拒绝','未授权真实连接及订阅调用拒绝','密钥输入框清空'],'harness_csp_bypass':True,'console_errors':errors,'real_qualified':real['counts']['合格有邮箱'],'windows_tested':False,'paid_actions':0}
+            result={'version':'1.2.0','checked_at':datetime.now(timezone.utc).isoformat(),'browser':browser.version,'checks':['中文导航7页','创建模拟任务','暂停/继续','20家公司贯通及16合格','Excel下载','诊断状态','预算基线确认','真实模式未连接安全暂停','CSRF拒绝','Host拒绝','未授权真实连接及订阅调用拒绝','密钥输入框清空','免费与收费来源切换','未评估收费创建拒绝','费用评估未连接拒绝','Apollo候选CSV导入无APIkey且不计合格'],'harness_csp_bypass':True,'console_errors':errors,'real_qualified':real['counts']['合格有邮箱'],'windows_tested':False,'paid_actions':0}
             Path('artifacts/browser-report.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');print(json.dumps(result,ensure_ascii=False))
             browser.close()
     finally:

@@ -48,6 +48,46 @@ result = bridge.review_company(record, evidence, enabled=True)
 
 `evaluate()` 保留函数名，但拒绝执行任意提示词，以免跳过固定证据合同。调用方应使用 `review_company()`；没有有效结构化审核正文的 `turn.completed` 不算成功。
 
+## 费用提示的订阅语义审核
+
+新增 `bridge.review_cost(action, evidence, enabled=True)`，用同一个官方 CLI、订阅验收门和受限进程解释费用提示。它不请求 Apollo，不自己浏览费用页面，不支付积分，也不授予收费权限。普通代码的费用策略、账号授权及原子预算账本仍分别决定能否执行；模型“认为免费”不能让未列入固定免费接口的动作免费运行。
+
+输入只接受已有 Apollo 适配器的固定四个端点及正确 HTTP 方法。例：
+
+```python
+action = {
+    "provider": "apollo", "method": "POST",
+    "endpoint": "/api/v1/mixed_companies/search",
+    "unit": "page", "page_size": 100, "applicable_plan": "当前套餐原名"
+}
+cost_evidence = [{
+    "id": "account-cost-1", "kind": "account_page",
+    "url": "https://app.apollo.io/#/settings/plans",
+    "observed_at": "2026-10-23T08:00:00+00:00",
+    "text": "此处由本人提供实际账户费用及套餐原文，不填写 API key 或 token"
+}]
+verdict = bridge.review_cost(action, cost_evidence, enabled=True)
+```
+
+上例只是字段说明，不是已取得的账户证据，也没有声明费用。证据的 `kind` 只接受 `official_docs` 或 `account_page`；前者限 Apollo 官方文档/官网 HTTPS 域名，后者限 `app.apollo.io`。每条必须有独立编号与带时区的实际采集时间。URL 校验并不证明文字确实来自该网页，实际采集方式、账户归属和完整原文仍由工作台保存核对。额外 action 字段（包括 API key、query 凭据）不会送给模型；疑似包含凭据的证据正文拒绝处理。
+
+输出固定为以下字段，禁止额外字段：
+
+| 字段 | 约束 |
+| --- | --- |
+| `classification` | `free`、`paid`、`unknown` |
+| `endpoint` | 必须与本次固定动作完全一致 |
+| `unit` | `request`、`page`、`record` 或 `unknown`；必须匹配动作单位，未知结果可保留 unknown |
+| `max_points` | 严格整数或 null；unknown 必须 null，free 必须 0，paid 必须正整数且完整出现在积分原文中。布尔值、字符串、小数、负数、溢出均拒绝 |
+| `applicable_plan` | 引用中的套餐原名；无证据为 null。不能串用其它套餐 |
+| `effective_at` / `valid_until` | 引用明确出现的 ISO 日期或带时区时间；无证据为 null。采集时间不是费用生效日，不能填造失效日期 |
+| `refs` | `[{"evidence_id":"本次证据编号","quote":"该证据中的连续逐字原文"}]` |
+| `reason` | 简短中文解释条件或缺口，不代表付费授权 |
+
+未知费用保持未知，不归零；“最低”“起价”、余额、每条费用、促销条件不应冒充整页上界。免费结果必须至少引用官方说明，但这仍不替代代码中的免费端点白名单。收费结果需要普通代码另外核实当前账户套餐、来源时效、明确上界、请求指纹与本人授权。缺项、冲突、过期或不能证明上界时暂停申请。
+
+费用审核与公司审核共用 `_invoke_structured`，包括环境清理、强制订阅、能力关闭、临时目录、只读沙箱、JSONL/结果文件一致性及 Schema 校验。费用审核出现超时、登录/额度错误、工具事件或无效结构时，会使旧订阅验收记录失效，并向任务层抛出可持久暂停的 `ConnectionPause`。没有自动重试或 API 回退。新增费用合同后协议版本为 2，旧版本验收记录需要本人重新运行固定样本验收。
+
 ## 验收门实际检查什么
 
 1. 只接受 CLI 明确返回 `Logged in using ChatGPT`，拒绝 API 登录、含混文本、未知登录输出、非零退出码和超时。不会显示原始登录输出。
@@ -68,6 +108,10 @@ result = bridge.review_company(record, evidence, enabled=True)
 ## 本次云端测试证据
 
 命令：`python -m unittest tests.test_codex_subscription -v`，**28 项全部通过（6.114 秒）**。所有模型结果来自测试生成的本地 `fake codex.py`，测试通过 `subprocess.Popen` 真正启动该脚本，没有网络模型调用。另以本云真实 `codex features list` 核对 24 个必需关闭项，缺失项为 0；该命令不请求模型。
+
+费用扩展测试：`python -m unittest tests.test_codex_costs -v`，**24 项全部通过（6.202 秒）**。包含真实本地假 CLI 子进程的免费/收费/未知输出、严格整数/null、来源与接口/单位/套餐/日期绑定、注入文本作为数据处理、凭据拒绝和环境清理、无效结果/工具事件/超时/权限/额度错误使验收失效。公司原有 28 项在抽取共享调用代码后重新通过（5.608 秒）。全部模型结论均为测试夹具，不是真实费用或真实客户。
+
+最终合并重跑：`python -m unittest tests.test_codex_subscription tests.test_codex_costs -q`，**52 项通过（10.750 秒）**；两个实现/测试文件的 `compileall` 与指定文件的 `git diff --check` 均通过。
 
 覆盖：订阅状态精确匹配、环境拒绝、旧 CLI/缺失能力/MCP 异常、显式验收、跨进程持久记录、版本和配置变化/过期失效、无正文伪完成、JSON 重复字段/类型错误/额外字段、结果文件缺失或不一致、工具事件/失败事件、超时/大输出/额度/权限/登录错误及脱敏、跨公司证据/伪造引用/邮箱 token 前后缀攻击、网页指令数据化、中文空格及含 `&` 的 Windows npm 路径解析、失败验收与审核失败使旧记录失效。
 

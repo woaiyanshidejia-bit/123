@@ -51,7 +51,7 @@ class Budget:
         moment = utc_now(now)
         day = beijing_day(moment)
         with self.store.transaction() as db:
-            if db.execute("SELECT 1 FROM charges WHERE status IN ('reserved','unknown')").fetchone():
+            if db.execute("SELECT 1 FROM charges WHERE status IN ('reserved','unknown','observed_pending')").fetchone():
                 raise BudgetPause('先对账所有未结算动作，禁止覆盖账户基线')
             prior = db.execute('SELECT used FROM budgets WHERE day=?', (day,)).fetchone()
             if prior and used < prior['used']:
@@ -76,8 +76,10 @@ class Budget:
             raise BudgetPause('全账号今日已用量未知，请核实申请')
         if db.execute("SELECT 1 FROM charges WHERE status='unknown'").fetchone():
             raise BudgetPause('存在结果未知动作，需先对账')
+        if db.execute("SELECT 1 FROM charges WHERE status='observed_pending' AND day<>?", (day,)).fetchone():
+            raise BudgetPause('存在跨日待结清的已验证响应，先核实实际费用和扣费日')
         # Include old-day reservations too: their charge day is not yet known.
-        held = db.execute("SELECT COALESCE(SUM(estimate),0) FROM charges WHERE status='reserved'").fetchone()[0]
+        held = db.execute("SELECT COALESCE(SUM(estimate),0) FROM charges WHERE status IN ('reserved','observed_pending')").fetchone()[0]
         if baseline['used'] + held + estimate > self.LIMIT:
             raise BudgetPause('预计超过北京时间每日50分上限，请申请')
         db.execute('INSERT INTO charges VALUES(?,?,?,NULL,?)', (action, day, estimate, 'reserved'))
@@ -108,7 +110,7 @@ class Budget:
             if not known or (billed_day is not None and known['billed_day'] != billed_day):
                 raise BudgetPause('已结算扣费归属日冲突或账本不完整')
             return
-        if row['status'] not in ('reserved', 'unknown'):
+        if row['status'] not in ('reserved', 'unknown', 'observed_pending'):
             raise BudgetPause('付费账本状态异常，需人工复核')
         today = beijing_day(now)
         if actual > 0 and row['day'] != today and billed_day is None:
@@ -128,3 +130,8 @@ class Budget:
             # A violated estimate invalidates the account assumption for any day
             # where another confirmed baseline might otherwise allow dispatch.
             db.execute('UPDATE budgets SET confirmed=0')
+            # An observed charge above its verified ceiling invalidates that
+            # account's batch authorization. A new baseline alone cannot restore it.
+            db.execute('''UPDATE paid_policies SET confirmed=0 WHERE account_label IN (
+                SELECT p.account_label FROM paid_policies p JOIN bounded_actions a
+                ON a.policy_id=p.id WHERE a.action=?)''', (action,))

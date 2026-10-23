@@ -49,7 +49,7 @@ class CodexSubscription:
         return self._call(self.protocol.validate_local, enabled=enabled)
     def evaluate(self, trusted_prompt, *, enabled=False):
         # Arbitrary prompts cannot bypass the company/evidence contract.
-        if not enabled: raise ConnectionPause('订阅调用未获本机显式启用')
+        if enabled is not True: raise ConnectionPause('订阅调用未获本机显式启用')
         raise ConnectionPause('请使用有固定 Schema 和证据绑定的 review_company；不执行任意提示词')
     def review_company(self, record, evidence, *, enabled=False):
         """Review already fetched evidence. Never fetches web pages or emails.
@@ -58,6 +58,9 @@ class CodexSubscription:
         Local subscription acceptance must pass before any company review.
         """
         return self._call(self.protocol.review_company, record, evidence, enabled=enabled)
+    def review_cost(self, action, evidence, *, enabled=False):
+        """Interpret supplied cost evidence; never authorizes or executes action."""
+        return self._call(self.protocol.review_cost, action, evidence, enabled=enabled)
     @staticmethod
     def _call(method, *args, **kwargs):
         from .codex_bridge import ProtocolPause
