@@ -42,7 +42,7 @@ class Engine:
         with self.store.transaction() as db:
             t=db.execute('SELECT * FROM tasks WHERE id=?',(task,)).fetchone()
             if not t or t['status'] not in ('ready','running'): return False
-            if t['owner'] and t['owner']!=self.owner and t['lease']>now: return False
+            if t['owner'] and t['lease']>now: return False
             candidate=db.execute("SELECT * FROM companies WHERE task=? AND stage='candidate' ORDER BY id LIMIT 1",(task,)).fetchone()
             action=f'verify:{candidate["id"]}' if candidate else f'page:{t["page"]}'
             attempt=db.execute('SELECT * FROM attempts WHERE task=? AND action=?',(task,action)).fetchone()

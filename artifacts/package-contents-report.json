@@ -3,5 +3,5 @@
   "packaged_unit_tests": "PASS",
   "forbidden_runtime_or_auth_files": 0,
   "windows_executed": false,
-  "unit_test_count": 54
+  "unit_test_count": 55
 }

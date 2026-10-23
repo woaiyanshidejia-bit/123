@@ -27,6 +27,7 @@ test_pinned_address_and_redirect_revalidation (test_workbench.PublicWebFixtureTe
 test_private_and_mixed_dns_blocked_before_connection (test_workbench.PublicWebFixtureTests.test_private_and_mixed_dns_blocked_before_connection) ... ok
 test_public_verifier_matches_business_and_public_mailto_without_execution (test_workbench.PublicWebFixtureTests.test_public_verifier_matches_business_and_public_mailto_without_execution) ... ok
 test_unrelated_business_does_not_qualify (test_workbench.PublicWebFixtureTests.test_unrelated_business_does_not_qualify) ... ok
+test_same_engine_cannot_enter_same_task_twice (test_workbench.SameWorkerConcurrencyTests.test_same_engine_cannot_enter_same_task_twice) ... ok
 test_old_cli_is_not_silently_downgraded (test_workbench.SubscriptionCommandTests.test_old_cli_is_not_silently_downgraded) ... ok
 test_subscription_command_isolated_and_mocked_only (test_workbench.SubscriptionCommandTests.test_subscription_command_isolated_and_mocked_only) ... ok
 test_api_auth_status_never_connected (test_workbench.SubscriptionTests.test_api_auth_status_never_connected) ... ok
@@ -54,6 +55,6 @@ test_single_instance_and_force_kill_release (test_workbench.WorkbenchTests.test_
 test_unexpected_error_does_not_leak (test_workbench.WorkbenchTests.test_unexpected_error_does_not_leak) ... ok
 
 ----------------------------------------------------------------------
-Ran 54 tests in 1.381s
+Ran 55 tests in 1.224s
 
 OK

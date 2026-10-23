@@ -448,4 +448,19 @@ class WebDeadlineTests(unittest.TestCase):
             with self.assertRaises(ConnectionPause):f.fetch('https://acme.example/','acme.example')
         finally:release.set()
 
+
+
+class SameWorkerConcurrencyTests(unittest.TestCase):
+    def test_same_engine_cannot_enter_same_task_twice(self):
+        import threading
+        entered=threading.Event();release=threading.Event()
+        class Blocking(MockSource):
+            def search(self,page):entered.set();release.wait(3);return super().search(page)
+        with tempfile.TemporaryDirectory() as temp:
+            store=Store(Path(temp)/'db');engine=Engine(store,Blocking());task=engine.create(15,'simulation')
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                first=pool.submit(engine.step,task);self.assertTrue(entered.wait(2));self.assertFalse(engine.step(task));release.set();self.assertTrue(first.result())
+            self.assertEqual(store.rows('SELECT page FROM tasks')[0]['page'],2)
+            self.assertEqual(len(store.rows('SELECT * FROM raw_records')),8)
+
 if __name__=='__main__':unittest.main()
