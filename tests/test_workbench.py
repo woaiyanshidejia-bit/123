@@ -206,21 +206,17 @@ class PaidGatewayTests(unittest.TestCase):
             self.assertEqual(g.execute('a',5,{}),{'records':[]});self.assertEqual(s.rows('SELECT used FROM budgets')[0]['used'],3)
 
 class SubscriptionCommandTests(unittest.TestCase):
-    def test_subscription_command_isolated_and_mocked_only(self):
-        responses=[subprocess.CompletedProcess([],0,'Logged in using ChatGPT',''),subprocess.CompletedProcess([],0,'--ignore-user-config',''),subprocess.CompletedProcess([],0,'{"type":"turn.completed"}','')]
-        runner=__import__('unittest').mock.Mock(side_effect=responses)
-        env={k:v for k,v in os.environ.items() if k not in ('OPENAI_API_KEY','CODEX_API_KEY','OPENAI_BASE_URL','CODEX_ACCESS_TOKEN')}
-        with patch.dict(os.environ,env,clear=True),patch('shutil.which',return_value='codex'):
-            result=CodexSubscription(runner).evaluate('trusted fixture',enabled=True)
-        args=runner.call_args.args[0]
-        self.assertIn('--ignore-user-config',args);self.assertIn('--ephemeral',args);self.assertIn('read-only',args);self.assertIn('forced_login_method="chatgpt"',args);self.assertNotIn('--with-api-key',args)
-        self.assertEqual(runner.call_count,3);self.assertIn('turn.completed',result)
+    def test_arbitrary_prompt_and_bare_turn_completed_never_bypass_contract(self):
+        runner=__import__('unittest').mock.Mock(return_value=subprocess.CompletedProcess([],0,'{"type":"turn.completed"}',''))
+        with self.assertRaises(ConnectionPause):
+            CodexSubscription(runner).evaluate('trusted fixture',enabled=True)
+        runner.assert_not_called()
     def test_old_cli_is_not_silently_downgraded(self):
-        runner=__import__('unittest').mock.Mock(side_effect=[subprocess.CompletedProcess([],0,'Logged in using ChatGPT',''),subprocess.CompletedProcess([],0,'old help','')])
-        env={k:v for k,v in os.environ.items() if k not in ('OPENAI_API_KEY','CODEX_API_KEY','OPENAI_BASE_URL','CODEX_ACCESS_TOKEN')}
-        with patch.dict(os.environ,env,clear=True),patch('shutil.which',return_value='codex'):
-            with self.assertRaises(ConnectionPause):CodexSubscription(runner).evaluate('fixture',enabled=True)
-        self.assertEqual(runner.call_count,2)
+        runner=__import__('unittest').mock.Mock(return_value=subprocess.CompletedProcess([],0,'old help',''))
+        with patch('shutil.which',return_value='codex'):
+            result=CodexSubscription(runner).preflight()
+        self.assertFalse(result['connected'])
+        self.assertFalse(any('exec' in call.args[0] and '--json' in call.args[0] for call in runner.call_args_list))
 
 class BudgetQueuePauseTests(unittest.TestCase):
     def test_budget_pause_reason_persists_in_queue(self):

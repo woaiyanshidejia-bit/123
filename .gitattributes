@@ -1,2 +1,5 @@
-*.cmd text eol=crlf
 * text=auto
+*.cmd text eol=crlf
+*.whl binary
+*.zip binary
+*.xlsx binary

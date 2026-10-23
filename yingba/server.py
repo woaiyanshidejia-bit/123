@@ -15,17 +15,21 @@ from .exchange import export,import_history
 from .diagnostics import diagnose
 from .lock import InstanceLock
 from .budget import Budget, BudgetPause, beijing_day
+from .adapters import ConnectionPause
+from .paid import PaidGateway, valid_reference
+from .runtime import Runtime, settings
 
 ROOT=Path(__file__).parent
 
 def serve(data,port=8765,open_browser=True):
     data=Path(data).resolve();data.mkdir(parents=True,exist_ok=True)
     with InstanceLock(data/'instance.lock'):
-        store=Store(data/'workbench.db'); engine=Engine(store); token=secrets.token_urlsafe(32); stop=threading.Event()
+        store=Store(data/'workbench.db'); runtime=Runtime(store); engine=Engine(store,source_factory=runtime.source_for_task); token=secrets.token_urlsafe(32); stop=threading.Event()
         def worker():
             while not stop.wait(.25):
                 for t in store.rows("SELECT id FROM tasks WHERE status IN ('ready','running') ORDER BY created"):
-                    engine.step(t['id'])
+                    try:engine.step(t['id'])
+                    except Exception:engine.pause(t['id'],'后台处理异常，状态已保留；请运行诊断后继续')
         class Handler(BaseHTTPRequestHandler):
             def setup(self):
                 super().setup();self.connection.settimeout(20)
@@ -47,12 +51,13 @@ def serve(data,port=8765,open_browser=True):
                     tasks=store.rows('SELECT * FROM tasks ORDER BY created DESC')
                     for t in tasks:t['counts']=engine.counts(t['id'])
                     return self.send(200,{'tasks':tasks,'companies':store.rows('SELECT id,task,name,domain,stage,reason,verified FROM companies ORDER BY id DESC'),
-                        'emails':store.rows('SELECT m.*,c.name,c.task FROM emails m JOIN companies c ON m.company=c.id ORDER BY address'),
+                        'emails':store.rows("SELECT m.*,c.name,c.task FROM emails m JOIN companies c ON m.company=c.id WHERE c.stage='qualified' AND c.verified=1 ORDER BY address"),
                         'evidence':store.rows('SELECT e.id,e.company,e.url,e.collected,e.basis,e.body_hash,e.simulation,c.name,c.task FROM evidence e JOIN companies c ON e.company=c.id ORDER BY e.id DESC'),
-                        'budget':{'day':beijing_day(),'ledger':store.rows('SELECT * FROM budgets WHERE day=?',(beijing_day(),)), 'pending':store.rows("SELECT action,day,estimate,status FROM charges WHERE status!='settled'")},'events':store.rows('SELECT * FROM events ORDER BY id DESC LIMIT 100'),'exports':[p.name for p in sorted((data/'exports').glob('*'))] if (data/'exports').exists() else []})
-                if parsed.path=='/api/diagnostics':return self.send(200,diagnose(store))
+                        'connections':runtime.status(), 'settings':store.rows('SELECT * FROM task_settings'), 'budget':{'day':beijing_day(),'ledger':store.rows('SELECT * FROM budgets WHERE day=?',(beijing_day(),)), 'pending':PaidGateway(store).pending()},'events':store.rows('SELECT * FROM events ORDER BY id DESC LIMIT 100'),'exports':[p.name for p in sorted((data/'exports').glob('*'))] if (data/'exports').exists() else []})
+                if parsed.path=='/api/diagnostics':return self.send(200,diagnose(store,runtime))
                 if parsed.path.startswith('/download/'):
-                    filename=parsed.path.removeprefix('/download/')
+                    from urllib.parse import unquote
+                    filename=unquote(parsed.path.removeprefix('/download/'))
                     if '/' in filename or '\\' in filename or filename.startswith('.'):return self.send(400,{'error':'无效文件名'})
                     path=data/'exports'/filename
                     if not path.is_file():return self.send(404,{'error':'文件不存在'})
@@ -60,11 +65,16 @@ def serve(data,port=8765,open_browser=True):
                 return self.send(404,{'error':'不存在'})
             def do_POST(self):
                 if not self.valid_host() or self.headers.get('Origin') not in (None,f'http://127.0.0.1:{self.server.server_port}') or not hmac.compare_digest(self.headers.get('X-Yingba-Token',''),token):return self.send(403,{'error':'请求校验失败，请刷新本机页面'})
+                action=self.path
                 try:
                     size=int(self.headers.get('Content-Length','0'))
                     if not 0<size<=15_000_000:raise ValueError('请求过大或为空')
                     r=json.loads(self.rfile.read(size));action=self.path
-                    if action=='/api/create':result={'id':engine.create(r.get('target',1000),r.get('mode','real'))}
+                    if action in ('/api/pause','/api/resume') and not store.rows('SELECT 1 FROM tasks WHERE id=?',(r.get('task'),)):
+                        raise ValueError('任务不存在')
+                    if action=='/api/create':
+                        config=settings(r.get('settings')) if r.get('mode','real')=='real' else None
+                        result={'id':engine.create(r.get('target',1000),r.get('mode','real'),config=config)}
                     elif action=='/api/pause':engine.pause(r['task']);result={'ok':True}
                     elif action=='/api/resume':engine.resume(r['task']);result={'ok':True}
                     elif action=='/api/export':
@@ -73,7 +83,20 @@ def serve(data,port=8765,open_browser=True):
                         if r.get('confirmed') is not True:raise ValueError('未确认全账号用量')
                         Budget(store).confirm(r['used']);result={'ok':True}
                     elif action=='/api/budget/settle':
-                        Budget(store).settle(r['action'],r['actual'],billed_day=r.get('billed_day'));result={'ok':True}
+                        if r.get('confirmed') is not True:raise ValueError('须核实实际扣费和日期')
+                        PaidGateway(store).reconcile_captured(r['action'],r['actual'],r['billed_day'],r['reference']);result={'ok':True}
+                    elif action=='/api/budget/resolve-missing':
+                        if r.get('confirmed') is not True or not str(r.get('reference','')).strip():raise ValueError('须核实实际扣费及动作专属依据')
+                        valid_reference(r['reference'])
+                        with store.transaction() as db:
+                            if db.execute('SELECT 1 FROM tasks WHERE owner IS NOT NULL AND lease>?',(time.time(),)).fetchone():raise BudgetPause('仍有请求在途，请等待任务暂停或租约到期后核清缺失响应')
+                            if db.execute('SELECT 1 FROM paid_observations WHERE action=?',(r['action'],)).fetchone():raise BudgetPause('该动作已保存响应，请使用已保存响应对账')
+                            Budget(store)._settle(db,r['action'],r['actual'],r['billed_day'])
+                            db.execute("INSERT INTO events(task,at,kind,detail) VALUES(NULL,datetime('now'),?,?)",('manual_reconcile',json.dumps({'action':r['action'],'reference':r['reference']},ensure_ascii=False)))
+                        result={'ok':True,'reason':'账目已核实；未恢复缺失响应，原动作禁止重发，请保留追溯并新建任务'}
+                    elif action=='/api/connect':result=runtime.connect(r.get('api_key'),r.get('account_label'),r.get('authorized'))
+                    elif action=='/api/disconnect':runtime.disconnect();result={'ok':True}
+                    elif action=='/api/codex/validate':result=runtime.validate_codex(authorized=r.get('authorized') is True)
                     elif action=='/api/history':
                         import base64
                         raw=base64.b64decode(r['content'],validate=True)
@@ -85,8 +108,9 @@ def serve(data,port=8765,open_browser=True):
                             result={'rows':import_history(store,p,r.get('mapping'))}
                     else:return self.send(404,{'error':'未知操作'})
                     return self.send(200,result)
-                except BudgetPause as exc:return self.send(409,{'error':str(exc)})
-                except (ValueError,KeyError,TypeError):return self.send(400,{'error':'参数或历史文件格式无效，请检查字段映射'})
+                except (BudgetPause,ConnectionPause) as exc:return self.send(409,{'error':str(exc)})
+                except ValueError as exc:return self.send(400,{'error':str(exc)[:300] if action not in ('/api/connect','/api/history') else '参数无效，请检查输入；密钥及文件内容未记录'})
+                except (KeyError,TypeError):return self.send(400,{'error':'参数或历史文件格式无效，请检查字段映射'})
                 except Exception:return self.send(409,{'error':'操作失败，未标记成功；请查看诊断和文件格式'})
         server=ThreadingHTTPServer(('127.0.0.1',port),Handler)
         threading.Thread(target=worker,daemon=True).start()

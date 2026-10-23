@@ -1,0 +1,22 @@
+{
+  "version": "1.1.0",
+  "unit_tests": 193,
+  "unit_result": "PASS",
+  "unit_seconds": 9.433,
+  "suites": {
+    "original_regressions": 55,
+    "apollo_local_http": 25,
+    "codex_fake_subprocess": 28,
+    "budget_review": 26,
+    "data_review": 30,
+    "runtime_integration": 13,
+    "actual_local_server_api": 4,
+    "windows_launcher_static": 12
+  },
+  "real_apollo_calls": 0,
+  "real_model_calls": 0,
+  "real_customers": 0,
+  "user_pc_used": false,
+  "windows_executed": false,
+  "billing_limitation": "Manual verified account baseline and action-specific cost reconciliation required per paid page; unknown actions never retried."
+}

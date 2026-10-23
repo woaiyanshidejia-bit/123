@@ -36,32 +36,30 @@ class MockSource:
                 'text':f'SIMULATION company={i} sales@lube{i}.example', 'simulation':True}
 
 class CodexSubscription:
-    """Explicit opt-in CLI bridge; never loads or copies authentication files."""
-    def __init__(self,runner=subprocess.run): self.runner=runner
+    """Subscription-only CLI bridge with explicit, persisted local acceptance."""
+    def __init__(self, runner=None, *, receipt_path=None):
+        from .codex_bridge import CodexProtocol
+        self.protocol = CodexProtocol(runner=runner, receipt_path=receipt_path)
+        self.runner = self.protocol.runner
     def status(self):
-        if not shutil.which('codex'): return {'connected':False,'reason':'未安装 Codex CLI'}
-        try:
-            p=self.runner(['codex','login','status'],capture_output=True,text=True,timeout=15)
-            # Do not expose stdout/stderr, which can contain credential metadata.
-            ok=p.returncode==0 and 'chatgpt' in (p.stdout+p.stderr).lower()
-            return {'connected':ok,'reason':'CLI报告ChatGPT登录；实际调用尚待本机验收' if ok else '未确认ChatGPT订阅登录，禁止API回退'}
-        except (OSError,subprocess.TimeoutExpired): return {'connected':False,'reason':'CLI诊断失败'}
+        return self.protocol.preflight()
+    def preflight(self):
+        return self.protocol.preflight()
+    def validate_local(self, *, enabled=False):
+        return self._call(self.protocol.validate_local, enabled=enabled)
     def evaluate(self, trusted_prompt, *, enabled=False):
+        # Arbitrary prompts cannot bypass the company/evidence contract.
         if not enabled: raise ConnectionPause('订阅调用未获本机显式启用')
-        if any(os.environ.get(k) for k in ('OPENAI_API_KEY','CODEX_API_KEY','OPENAI_BASE_URL','CODEX_ACCESS_TOKEN')):
-            raise ConnectionPause('检测到API环境配置，拒绝调用')
-        if not self.status()['connected']: raise ConnectionPause('未确认ChatGPT订阅登录')
-        # Forced built-in provider/auth. No network tools, shell execution, or external MCP.
-        with tempfile.TemporaryDirectory(prefix='yingba-codex-') as directory:
-            # Version-gate supported isolation flags; do not silently drop them.
-            help_result=self.runner(['codex','exec','--help'],capture_output=True,text=True,timeout=15)
-            if help_result.returncode or '--ignore-user-config' not in help_result.stdout:
-                raise ConnectionPause('CLI版本未提供所需配置隔离，请按指南升级后验收')
-            args=['codex','exec','--ignore-user-config','--ephemeral','--skip-git-repo-check','--sandbox','read-only',
-                  '-c','model_provider="openai"','-c','forced_login_method="chatgpt"',
-                  '-c','features.shell_tool=false','--json','-']
-            try:
-                p=self.runner(args,input=trusted_prompt,cwd=directory,capture_output=True,text=True,timeout=180)
-            except subprocess.TimeoutExpired as exc: raise ConnectionPause('Codex超时，需人工确认，不自动重试') from exc
-            if p.returncode: raise ConnectionPause('Codex调用失败，请运行诊断；未使用API回退')
-            return p.stdout
+        raise ConnectionPause('请使用有固定 Schema 和证据绑定的 review_company；不执行任意提示词')
+    def review_company(self, record, evidence, *, enabled=False):
+        """Review already fetched evidence. Never fetches web pages or emails.
+
+        ``evidence`` is a list of {id, url, text}; see the documented JSON schema.
+        Local subscription acceptance must pass before any company review.
+        """
+        return self._call(self.protocol.review_company, record, evidence, enabled=enabled)
+    @staticmethod
+    def _call(method, *args, **kwargs):
+        from .codex_bridge import ProtocolPause
+        try: return method(*args, **kwargs)
+        except ProtocolPause as exc: raise ConnectionPause(str(exc)) from None

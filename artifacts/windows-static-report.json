@@ -1,0 +1,57 @@
+{
+  "checked_at": "2026-10-23T10:15:15.435238+00:00",
+  "status": "passed",
+  "scope": "Cloud static checks and optional host path smoke; not Windows acceptance",
+  "launchers": {
+    "files": [
+      "安装.cmd",
+      "启动.cmd",
+      "诊断.cmd",
+      "登录Codex.cmd"
+    ],
+    "encoding": "UTF-8 without BOM / CRLF",
+    "path_cases_statically_checked": [
+      "C:\\YINGBA\\",
+      "C:\\客户资料\\YINGBA 工作台\\",
+      "D:\\YINGBA ! 100% & OEM (2026)^\\",
+      "\\\\server\\客户共享\\YINGBA 工作台 !\\"
+    ],
+    "cmd_executed": false
+  },
+  "wheels": [
+    {
+      "filename": "et_xmlfile-2.0.0-py3-none-any.whl",
+      "version": "2.0.0",
+      "sha256": "7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa",
+      "tags": [
+        "py3-none-any"
+      ],
+      "requires_dist": []
+    },
+    {
+      "filename": "openpyxl-3.1.5-py2.py3-none-any.whl",
+      "version": "3.1.5",
+      "sha256": "5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2",
+      "tags": [
+        "py2-none-any",
+        "py3-none-any"
+      ],
+      "requires_dist": [
+        "et-xmlfile"
+      ]
+    }
+  ],
+  "windows_cmd_execution_verified": false,
+  "browser_login_verified": false,
+  "host_path_smoke": {
+    "executed_on": "linux",
+    "windows_execution": false,
+    "directory_name": "中文工作台 空格 ! 100% & (OEM)^",
+    "offline_install_exit": 0,
+    "result": {
+      "openpyxl": "3.1.5",
+      "sqlite": "3.53.1",
+      "unicode_sqlite_xlsx_roundtrip": true
+    }
+  }
+}

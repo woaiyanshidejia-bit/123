@@ -1,5 +1,6 @@
 """Browser under production CSP; test harness does not bypass security policy."""
 import json
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import socket
@@ -19,6 +20,6 @@ with tempfile.TemporaryDirectory() as temp:
             expect(page.locator('#status')).to_contain_text('模拟验收达标',timeout=20000)
             expect(page.locator('#cards')).to_contain_text('合格有邮箱')
             assert not errors
-            result={'csp_bypass':False,'standard_csp_real_ui_flow':'PASS','inline_handlers_work':True,'page_errors':errors,'bound_to':'127.0.0.1','external_frontend_requests':0}
+            result={'version':'1.1.0','checked_at':datetime.now(timezone.utc).isoformat(),'csp_bypass':False,'standard_csp_real_ui_flow':'PASS','inline_handlers_work':True,'page_errors':errors,'bound_to':'127.0.0.1','external_frontend_requests':0}
             Path('artifacts/http-report.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');print(json.dumps(result,ensure_ascii=False));b.close()
     finally:p.terminate();p.wait(timeout=10);p.stdout.close()

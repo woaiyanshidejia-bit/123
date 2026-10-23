@@ -1,5 +1,6 @@
 """Cloud-only browser acceptance. Requires developer-only Playwright and Chromium."""
 import json
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import re
@@ -37,8 +38,15 @@ with tempfile.TemporaryDirectory() as tmp:
             download=info.value;assert download.suggested_filename.startswith('SIMULATION_')
             for label in ['公司总表','邮箱清单','核实证据','连接状态']:
                 page.get_by_role('button',name=label,exact=True).click()
+            # Real integration buttons fail before network/model without explicit authorization.
+            page.locator('#apolloKey').fill('synthetic-ui-fixture')
+            page.get_by_role('button',name='连接并免费检查',exact=True).click()
+            page.wait_for_function('document.querySelector("#message").textContent.includes("授权")')
+            assert page.locator('#apolloKey').input_value()==''
+            page.get_by_role('button',name='运行订阅最小验收',exact=True).click()
+            page.wait_for_function('document.querySelector("#codexResult").textContent.includes("同意")')
             # Read-only diagnostic may query local CLI status but never exec or login.
-            page.get_by_role('button',name='运行只读诊断',exact=True).click()
+            page.get_by_role('button',name='运行诊断',exact=True).click()
             page.wait_for_function('document.querySelector("#diagnostics").textContent.includes("Apollo")')
             page.locator('#budgetUsed').fill('0');page.locator('#budgetConfirmed').check();page.get_by_role('button',name='确认已核实用量',exact=True).click()
             page.wait_for_function('state.budget.ledger.length===1')
@@ -51,7 +59,7 @@ with tempfile.TemporaryDirectory() as tmp:
             # HTTP security assertions from actual served origin.
             assert context.request.post(url+'/api/create',data={'target':1}).status==403
             assert context.request.get(url+'/api/state',headers={'Host':'evil.example'}).status==403
-            result={'browser':browser.version,'checks':['中文导航7页','创建模拟任务','暂停/继续','20家公司贯通及16合格','Excel下载','诊断状态','预算基线确认','真实模式未连接安全暂停','CSRF拒绝','Host拒绝'],'harness_csp_bypass':True,'console_errors':errors,'real_qualified':real['counts']['合格有邮箱'],'windows_tested':False,'paid_actions':0}
+            result={'version':'1.1.0','checked_at':datetime.now(timezone.utc).isoformat(),'browser':browser.version,'checks':['中文导航7页','创建模拟任务','暂停/继续','20家公司贯通及16合格','Excel下载','诊断状态','预算基线确认','真实模式未连接安全暂停','CSRF拒绝','Host拒绝','未授权真实连接及订阅调用拒绝','密钥输入框清空'],'harness_csp_bypass':True,'console_errors':errors,'real_qualified':real['counts']['合格有邮箱'],'windows_tested':False,'paid_actions':0}
             Path('artifacts/browser-report.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');print(json.dumps(result,ensure_ascii=False))
             browser.close()
     finally:
