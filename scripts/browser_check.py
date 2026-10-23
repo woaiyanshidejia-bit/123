@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory() as tmp:
             # Read-only diagnostic may query local CLI status but never exec or login.
             page.get_by_role('button',name='运行只读诊断',exact=True).click()
             page.wait_for_function('document.querySelector("#diagnostics").textContent.includes("Apollo")')
-            page.locator('#budgetUsed').fill('0');page.get_by_role('button',name='确认已核实用量',exact=True).click()
+            page.locator('#budgetUsed').fill('0');page.locator('#budgetConfirmed').check();page.get_by_role('button',name='确认已核实用量',exact=True).click()
             page.wait_for_function('state.budget.ledger.length===1')
             page.get_by_role('button',name='任务设置',exact=True).click();page.locator('#target').fill('1000');page.locator('#mode').select_option('real');page.get_by_role('button',name='创建并开始',exact=True).click()
             page.wait_for_function('state.tasks.some(t=>t.mode==="real"&&t.status==="paused")')

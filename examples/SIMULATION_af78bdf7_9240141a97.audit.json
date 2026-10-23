@@ -1,6 +1,6 @@
 {
   "task": {
-    "id": "814705a177374cd78502913e6572cd0a",
+    "id": "af78bdf721834064a13470dab9e2bddd",
     "mode": "simulation",
     "target": 15,
     "status": "simulation_complete",
@@ -9,225 +9,215 @@
     "reason": "模拟验收达标，非真实客户",
     "owner": null,
     "lease": 0.0,
-    "created": "2026-10-23T09:41:31.151530+00:00"
+    "created": "2026-10-23T09:58:05.867295+00:00"
   },
   "simulation": true,
   "raw_records": [
     {
       "id": 1,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 1,
       "raw": "{\"name\": \"模拟润滑油公司 01\", \"domain\": \"lube1.example\", \"apollo_id\": \"mock-1\", \"mock_id\": 1}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 1,
-      "collected": "2026-10-23T09:41:31.153072+00:00"
+      "collected": "2026-10-23T09:58:05.868701+00:00"
     },
     {
       "id": 2,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 1,
       "raw": "{\"name\": \"模拟润滑油公司 02\", \"domain\": \"lube2.example\", \"apollo_id\": \"mock-2\", \"mock_id\": 2}",
-      "outcome": "候选",
+      "outcome": "excluded",
       "company": 2,
-      "collected": "2026-10-23T09:41:31.153139+00:00"
+      "collected": "2026-10-23T09:58:05.868756+00:00"
     },
     {
       "id": 3,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 1,
       "raw": "{\"name\": \"模拟润滑油公司 03\", \"domain\": \"lube3.example\", \"apollo_id\": \"mock-3\", \"mock_id\": 3}",
-      "outcome": "候选",
+      "outcome": "excluded",
       "company": 3,
-      "collected": "2026-10-23T09:41:31.153189+00:00"
+      "collected": "2026-10-23T09:58:05.868786+00:00"
     },
     {
       "id": 4,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 1,
       "raw": "{\"name\": \"模拟润滑油公司 04\", \"domain\": \"lube4.example\", \"apollo_id\": \"mock-4\", \"mock_id\": 4}",
-      "outcome": "候选",
+      "outcome": "excluded",
       "company": 4,
-      "collected": "2026-10-23T09:41:31.153210+00:00"
+      "collected": "2026-10-23T09:58:05.868833+00:00"
     },
     {
       "id": 5,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 1,
       "raw": "{\"name\": \"模拟润滑油公司 05\", \"domain\": \"lube5.example\", \"apollo_id\": \"mock-5\", \"mock_id\": 5}",
-      "outcome": "候选",
+      "outcome": "excluded",
       "company": 5,
-      "collected": "2026-10-23T09:41:31.153229+00:00"
+      "collected": "2026-10-23T09:58:05.868859+00:00"
     },
     {
       "id": 6,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 1,
       "raw": "{\"name\": \"模拟润滑油公司 06\", \"domain\": \"lube6.example\", \"apollo_id\": \"mock-6\", \"mock_id\": 6}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 6,
-      "collected": "2026-10-23T09:41:31.153258+00:00"
+      "collected": "2026-10-23T09:58:05.868881+00:00"
     },
     {
       "id": 7,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 1,
       "raw": "{\"name\": \"模拟润滑油公司 07\", \"domain\": \"lube7.example\", \"apollo_id\": \"mock-7\", \"mock_id\": 7}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 7,
-      "collected": "2026-10-23T09:41:31.153275+00:00"
+      "collected": "2026-10-23T09:58:05.868903+00:00"
     },
     {
       "id": 8,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 1,
       "raw": "{\"name\": \"模拟润滑油公司 08\", \"domain\": \"lube8.example\", \"apollo_id\": \"mock-8\", \"mock_id\": 8}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 8,
-      "collected": "2026-10-23T09:41:31.153292+00:00"
+      "collected": "2026-10-23T09:58:05.868924+00:00"
     },
     {
       "id": 9,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 2,
       "raw": "{\"name\": \"模拟润滑油公司 09\", \"domain\": \"lube9.example\", \"apollo_id\": \"mock-9\", \"mock_id\": 9}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 9,
-      "collected": "2026-10-23T09:41:31.157303+00:00"
+      "collected": "2026-10-23T09:58:05.875356+00:00"
     },
     {
       "id": 10,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 2,
       "raw": "{\"name\": \"模拟润滑油公司 10\", \"domain\": \"lube10.example\", \"apollo_id\": \"mock-10\", \"mock_id\": 10}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 10,
-      "collected": "2026-10-23T09:41:31.157334+00:00"
+      "collected": "2026-10-23T09:58:05.875392+00:00"
     },
     {
       "id": 11,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 2,
       "raw": "{\"name\": \"模拟润滑油公司 11\", \"domain\": \"lube11.example\", \"apollo_id\": \"mock-11\", \"mock_id\": 11}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 11,
-      "collected": "2026-10-23T09:41:31.157363+00:00"
+      "collected": "2026-10-23T09:58:05.875417+00:00"
     },
     {
       "id": 12,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 2,
       "raw": "{\"name\": \"模拟润滑油公司 12\", \"domain\": \"lube12.example\", \"apollo_id\": \"mock-12\", \"mock_id\": 12}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 12,
-      "collected": "2026-10-23T09:41:31.157383+00:00"
+      "collected": "2026-10-23T09:58:05.875441+00:00"
     },
     {
       "id": 13,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 2,
       "raw": "{\"name\": \"模拟润滑油公司 13\", \"domain\": \"lube13.example\", \"apollo_id\": \"mock-13\", \"mock_id\": 13}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 13,
-      "collected": "2026-10-23T09:41:31.157401+00:00"
+      "collected": "2026-10-23T09:58:05.875462+00:00"
     },
     {
       "id": 14,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 2,
       "raw": "{\"name\": \"模拟润滑油公司 14\", \"domain\": \"lube14.example\", \"apollo_id\": \"mock-14\", \"mock_id\": 14}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 14,
-      "collected": "2026-10-23T09:41:31.157430+00:00"
+      "collected": "2026-10-23T09:58:05.875488+00:00"
     },
     {
       "id": 15,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 2,
       "raw": "{\"name\": \"模拟润滑油公司 15\", \"domain\": \"lube15.example\", \"apollo_id\": \"mock-15\", \"mock_id\": 15}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 15,
-      "collected": "2026-10-23T09:41:31.157454+00:00"
+      "collected": "2026-10-23T09:58:05.875512+00:00"
     },
     {
       "id": 16,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 2,
       "raw": "{\"name\": \"模拟润滑油公司 16\", \"domain\": \"lube16.example\", \"apollo_id\": \"mock-16\", \"mock_id\": 16}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 16,
-      "collected": "2026-10-23T09:41:31.157473+00:00"
+      "collected": "2026-10-23T09:58:05.875534+00:00"
     },
     {
       "id": 17,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 2,
       "raw": "{\"name\": \"同一公司别名\", \"domain\": \"https://WWW.lube1.example/\", \"apollo_id\": \"other\", \"mock_id\": 1}",
       "outcome": "历史或当批重复",
       "company": 1,
-      "collected": "2026-10-23T09:41:31.157495+00:00"
+      "collected": "2026-10-23T09:58:05.875557+00:00"
     },
     {
       "id": 18,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 2,
       "raw": "{\"name\": \"模拟润滑油公司 09\", \"domain\": \"lube9.example\", \"apollo_id\": \"mock-9\", \"mock_id\": 9}",
       "outcome": "历史或当批重复",
       "company": 9,
-      "collected": "2026-10-23T09:41:31.157517+00:00"
+      "collected": "2026-10-23T09:58:05.875572+00:00"
     },
     {
       "id": 19,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 3,
       "raw": "{\"name\": \"模拟润滑油公司 17\", \"domain\": \"lube17.example\", \"apollo_id\": \"mock-17\", \"mock_id\": 17}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 17,
-      "collected": "2026-10-23T09:41:31.161775+00:00"
+      "collected": "2026-10-23T09:58:05.881692+00:00"
     },
     {
       "id": 20,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 3,
       "raw": "{\"name\": \"模拟润滑油公司 18\", \"domain\": \"lube18.example\", \"apollo_id\": \"mock-18\", \"mock_id\": 18}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 18,
-      "collected": "2026-10-23T09:41:31.161804+00:00"
+      "collected": "2026-10-23T09:58:05.881726+00:00"
     },
     {
       "id": 21,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 3,
       "raw": "{\"name\": \"模拟润滑油公司 19\", \"domain\": \"lube19.example\", \"apollo_id\": \"mock-19\", \"mock_id\": 19}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 19,
-      "collected": "2026-10-23T09:41:31.161823+00:00"
+      "collected": "2026-10-23T09:58:05.881752+00:00"
     },
     {
       "id": 22,
-      "task": "814705a177374cd78502913e6572cd0a",
+      "task": "af78bdf721834064a13470dab9e2bddd",
       "page": 3,
       "raw": "{\"name\": \"模拟润滑油公司 20\", \"domain\": \"lube20.example\", \"apollo_id\": \"mock-20\", \"mock_id\": 20}",
-      "outcome": "候选",
+      "outcome": "qualified",
       "company": 20,
-      "collected": "2026-10-23T09:41:31.161841+00:00"
+      "collected": "2026-10-23T09:58:05.881776+00:00"
     }
   ],
   "evidence": [
     {
-      "id": 1,
-      "company": 1,
-      "url": "https://lube1.example/contact",
-      "collected": "2026-10-23T09:41:31.153769+00:00",
-      "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
-      "body_hash": "bc0228ea33c2a1be63db5499308475dd10ad989fe806785f3f5314a3280433ff",
-      "body": "SIMULATION company=1 sales@lube1.example",
-      "simulation": 1
-    },
-    {
       "id": 2,
       "company": 2,
       "url": "https://lube2.example/contact",
-      "collected": "2026-10-23T09:41:31.154366+00:00",
+      "collected": "2026-10-23T09:58:05.870644+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "94b3c3b63a037bd63a59caeaa45461cbb36fc515d28066e54a58823c2bd3c29e",
       "body": "SIMULATION company=2 sales@lube2.example",
@@ -237,7 +227,7 @@
       "id": 3,
       "company": 3,
       "url": "https://lube3.example/contact",
-      "collected": "2026-10-23T09:41:31.154702+00:00",
+      "collected": "2026-10-23T09:58:05.871303+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "c4692196acada2165e81dba7e16071eb534307b2272ffbdcc8be1dc17fb53baa",
       "body": "SIMULATION company=3 sales@lube3.example",
@@ -247,7 +237,7 @@
       "id": 4,
       "company": 4,
       "url": "https://lube4.example/contact",
-      "collected": "2026-10-23T09:41:31.155006+00:00",
+      "collected": "2026-10-23T09:58:05.871924+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "9206f2abff37c7d1c86500e21f77e4db0e29782ea9daf9e1603f66abf480c898",
       "body": "SIMULATION company=4 sales@lube4.example",
@@ -257,17 +247,27 @@
       "id": 5,
       "company": 5,
       "url": "https://lube5.example/contact",
-      "collected": "2026-10-23T09:41:31.155351+00:00",
+      "collected": "2026-10-23T09:58:05.872562+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "adfb24240d33d351e15f9413c344ee723e9126699db57d8a8dcee6395ed59022",
       "body": "SIMULATION company=5 sales@lube5.example",
       "simulation": 1
     },
     {
+      "id": 1,
+      "company": 1,
+      "url": "https://lube1.example/contact",
+      "collected": "2026-10-23T09:58:05.869742+00:00",
+      "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
+      "body_hash": "bc0228ea33c2a1be63db5499308475dd10ad989fe806785f3f5314a3280433ff",
+      "body": "SIMULATION company=1 sales@lube1.example",
+      "simulation": 1
+    },
+    {
       "id": 6,
       "company": 6,
       "url": "https://lube6.example/contact",
-      "collected": "2026-10-23T09:41:31.155685+00:00",
+      "collected": "2026-10-23T09:58:05.873241+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "dc1fe7b0f4d8b9e6df685b8e2f59f1c8070f992e49a1d7a3bc681c99ab8ae49e",
       "body": "SIMULATION company=6 sales@lube6.example",
@@ -277,7 +277,7 @@
       "id": 7,
       "company": 7,
       "url": "https://lube7.example/contact",
-      "collected": "2026-10-23T09:41:31.156029+00:00",
+      "collected": "2026-10-23T09:58:05.873894+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "8361a08c5922413e9e8869735fd29cb5217477dd84553126f16798ba7e878ab0",
       "body": "SIMULATION company=7 sales@lube7.example",
@@ -287,7 +287,7 @@
       "id": 8,
       "company": 8,
       "url": "https://lube8.example/contact",
-      "collected": "2026-10-23T09:41:31.156368+00:00",
+      "collected": "2026-10-23T09:58:05.874518+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "df5107727fe367956b8c8948ac51995a4ee8b7bcb2cf2ae857f6041d3b239afd",
       "body": "SIMULATION company=8 sales@lube8.example",
@@ -297,7 +297,7 @@
       "id": 9,
       "company": 9,
       "url": "https://lube9.example/contact",
-      "collected": "2026-10-23T09:41:31.157972+00:00",
+      "collected": "2026-10-23T09:58:05.876231+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "02f3bf451252eec728741f0ca78e6fe1c360d3f34ccefa6ab17b039c5dbdb918",
       "body": "SIMULATION company=9 sales@lube9.example",
@@ -307,7 +307,7 @@
       "id": 10,
       "company": 10,
       "url": "https://lube10.example/contact",
-      "collected": "2026-10-23T09:41:31.158443+00:00",
+      "collected": "2026-10-23T09:58:05.876968+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "b9baa1e77c786bc50570370cdaa39181c316551be79f451cc3c3a00e0385e529",
       "body": "SIMULATION company=10 sales@lube10.example",
@@ -317,7 +317,7 @@
       "id": 11,
       "company": 11,
       "url": "https://lube11.example/contact",
-      "collected": "2026-10-23T09:41:31.158845+00:00",
+      "collected": "2026-10-23T09:58:05.877608+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "76a0b5894b813bbcbd54881f14df5347d7b1bae60d3c6286e5c970dc3f11539b",
       "body": "SIMULATION company=11 sales@lube11.example",
@@ -327,7 +327,7 @@
       "id": 12,
       "company": 12,
       "url": "https://lube12.example/contact",
-      "collected": "2026-10-23T09:41:31.159249+00:00",
+      "collected": "2026-10-23T09:58:05.878261+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "f8d2c8820a84112e9e433152b9c4344381e21af2f161ff2f521de139e2049da3",
       "body": "SIMULATION company=12 sales@lube12.example",
@@ -337,7 +337,7 @@
       "id": 13,
       "company": 13,
       "url": "https://lube13.example/contact",
-      "collected": "2026-10-23T09:41:31.159641+00:00",
+      "collected": "2026-10-23T09:58:05.878899+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "e30d52a0356c8a9c925c571e700306d74e3e82a40d39359feffb72c7e859e0be",
       "body": "SIMULATION company=13 sales@lube13.example",
@@ -347,7 +347,7 @@
       "id": 14,
       "company": 14,
       "url": "https://lube14.example/contact",
-      "collected": "2026-10-23T09:41:31.160014+00:00",
+      "collected": "2026-10-23T09:58:05.879558+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "c1a07a6d2e91485bd74da578eeb5f9b29aa9f7b7700294d13c6affb8e878694d",
       "body": "SIMULATION company=14 sales@lube14.example",
@@ -357,7 +357,7 @@
       "id": 15,
       "company": 15,
       "url": "https://lube15.example/contact",
-      "collected": "2026-10-23T09:41:31.160424+00:00",
+      "collected": "2026-10-23T09:58:05.880195+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "596c2e9ae822946940246f97789faefd4adef3313ef705c124301ad82695f2ea",
       "body": "SIMULATION company=15 sales@lube15.example",
@@ -367,7 +367,7 @@
       "id": 16,
       "company": 16,
       "url": "https://lube16.example/contact",
-      "collected": "2026-10-23T09:41:31.160882+00:00",
+      "collected": "2026-10-23T09:58:05.880885+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "f20dcc3bd174dc5bf96e1511f86876525dde31a878c6635c12164024ff58a0d0",
       "body": "SIMULATION company=16 sales@lube16.example",
@@ -377,7 +377,7 @@
       "id": 17,
       "company": 17,
       "url": "https://lube17.example/contact",
-      "collected": "2026-10-23T09:41:31.162244+00:00",
+      "collected": "2026-10-23T09:58:05.882405+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "39b2aa7e50f630ffd6c7188b477ef2dbbad8e6fccf9536058749588bb148d2f6",
       "body": "SIMULATION company=17 sales@lube17.example",
@@ -387,7 +387,7 @@
       "id": 18,
       "company": 18,
       "url": "https://lube18.example/contact",
-      "collected": "2026-10-23T09:41:31.162620+00:00",
+      "collected": "2026-10-23T09:58:05.883072+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "c1895b75a19729a0b16db35d724e6dcc45bf627f0081645f9306fb4032d33fd0",
       "body": "SIMULATION company=18 sales@lube18.example",
@@ -397,7 +397,7 @@
       "id": 19,
       "company": 19,
       "url": "https://lube19.example/contact",
-      "collected": "2026-10-23T09:41:31.162988+00:00",
+      "collected": "2026-10-23T09:58:05.883690+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "4bdce64c694879cd400fde4119c9375c721d8f7222e9d3545659b06afedeca68",
       "body": "SIMULATION company=19 sales@lube19.example",
@@ -407,7 +407,7 @@
       "id": 20,
       "company": 20,
       "url": "https://lube20.example/contact",
-      "collected": "2026-10-23T09:41:31.163377+00:00",
+      "collected": "2026-10-23T09:58:05.884357+00:00",
       "basis": "模拟官网主体与润滑油业务信息，商务联系邮箱出现在公司联系页面",
       "body_hash": "014573371f0e626501a957246bed17aae4106840a87cf08a05d84bf77d555769",
       "body": "SIMULATION company=20 sales@lube20.example",
@@ -448,5 +448,5 @@
     "companies": 16,
     "unique_emails": 16
   },
-  "xlsx_sha256": "71559414273d7902bca38ed1f7c793d9e1dbb0bbda7b155e4c05405597ffdd56"
+  "xlsx_sha256": "70e14af57181d1d1927022c12126368d86ae150c3974815a67dbf286298a4fba"
 }

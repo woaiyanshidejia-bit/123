@@ -27,6 +27,8 @@ def serve(data,port=8765,open_browser=True):
                 for t in store.rows("SELECT id FROM tasks WHERE status IN ('ready','running') ORDER BY created"):
                     engine.step(t['id'])
         class Handler(BaseHTTPRequestHandler):
+            def setup(self):
+                super().setup();self.connection.settimeout(20)
             def log_message(self,*args):pass # No request data or credentials in logs.
             def send(self,status,body,typ='application/json; charset=utf-8'):
                 body=body if isinstance(body,bytes) else json.dumps(body,ensure_ascii=False).encode()
@@ -46,7 +48,7 @@ def serve(data,port=8765,open_browser=True):
                     for t in tasks:t['counts']=engine.counts(t['id'])
                     return self.send(200,{'tasks':tasks,'companies':store.rows('SELECT id,task,name,domain,stage,reason,verified FROM companies ORDER BY id DESC'),
                         'emails':store.rows('SELECT m.*,c.name,c.task FROM emails m JOIN companies c ON m.company=c.id ORDER BY address'),
-                        'evidence':store.rows('SELECT e.*,c.name,c.task FROM evidence e JOIN companies c ON e.company=c.id ORDER BY e.id DESC'),
+                        'evidence':store.rows('SELECT e.id,e.company,e.url,e.collected,e.basis,e.body_hash,e.simulation,c.name,c.task FROM evidence e JOIN companies c ON e.company=c.id ORDER BY e.id DESC'),
                         'budget':{'day':beijing_day(),'ledger':store.rows('SELECT * FROM budgets WHERE day=?',(beijing_day(),)), 'pending':store.rows("SELECT action,day,estimate,status FROM charges WHERE status!='settled'")},'events':store.rows('SELECT * FROM events ORDER BY id DESC LIMIT 100'),'exports':[p.name for p in sorted((data/'exports').glob('*'))] if (data/'exports').exists() else []})
                 if parsed.path=='/api/diagnostics':return self.send(200,diagnose(store))
                 if parsed.path.startswith('/download/'):
@@ -62,15 +64,16 @@ def serve(data,port=8765,open_browser=True):
                     size=int(self.headers.get('Content-Length','0'))
                     if not 0<size<=15_000_000:raise ValueError('请求过大或为空')
                     r=json.loads(self.rfile.read(size));action=self.path
-                    if action=='/api/create':result={'id':engine.create(int(r.get('target',1000)),r.get('mode','real'))}
+                    if action=='/api/create':result={'id':engine.create(r.get('target',1000),r.get('mode','real'))}
                     elif action=='/api/pause':engine.pause(r['task']);result={'ok':True}
                     elif action=='/api/resume':engine.resume(r['task']);result={'ok':True}
                     elif action=='/api/export':
                         p,a=export(store,r['task'],data/'exports');result={'files':[p.name,a.name]}
                     elif action=='/api/budget/confirm':
+                        if r.get('confirmed') is not True:raise ValueError('未确认全账号用量')
                         Budget(store).confirm(r['used']);result={'ok':True}
                     elif action=='/api/budget/settle':
-                        Budget(store).settle(r['action'],r['actual']);result={'ok':True}
+                        Budget(store).settle(r['action'],r['actual'],billed_day=r.get('billed_day'));result={'ok':True}
                     elif action=='/api/history':
                         import base64
                         raw=base64.b64decode(r['content'],validate=True)

@@ -4,13 +4,38 @@ test_beijing_midnight_requires_new_confirmation (test_workbench.BudgetTests.test
 test_concurrent_account_tasks_atomic_limit (test_workbench.BudgetTests.test_concurrent_account_tasks_atomic_limit) ... ok
 test_unknown_baseline_and_overspend (test_workbench.BudgetTests.test_unknown_baseline_and_overspend) ... ok
 test_unknown_reconcile_blocks_retry (test_workbench.BudgetTests.test_unknown_reconcile_blocks_retry) ... ok
+test_xml_control_prefix_cannot_hide_formula (test_workbench.CellControlCharacterTests.test_xml_control_prefix_cannot_hide_formula) ... ok
+test_backoff_does_not_leave_lease_across_restart (test_workbench.DeepReviewTests.test_backoff_does_not_leave_lease_across_restart) ... ok
+test_boolean_budget_is_not_a_number (test_workbench.DeepReviewTests.test_boolean_budget_is_not_a_number) ... ok
+test_connection_context_closes (test_workbench.DeepReviewTests.test_connection_context_closes) ... ok
+test_email_substring_cannot_forge_attribution (test_workbench.DeepReviewTests.test_email_substring_cannot_forge_attribution) ... ok
+test_excel_formula_mailbox_escaped_in_both_sheets (test_workbench.DeepReviewTests.test_excel_formula_mailbox_escaped_in_both_sheets) ... ok
+test_large_archive_and_empty_history_fail_cleanly (test_workbench.DeepReviewTests.test_large_archive_and_empty_history_fail_cleanly) ... ok
+test_malformed_mailboxes_rejected (test_workbench.DeepReviewTests.test_malformed_mailboxes_rejected) ... ok
+test_mock_paid_transport_process_exit_requires_reconciliation (test_workbench.DeepReviewTests.test_mock_paid_transport_process_exit_requires_reconciliation) ... ok
+test_paid_known_receipt_replays_after_process_restart_without_transport (test_workbench.DeepReviewTests.test_paid_known_receipt_replays_after_process_restart_without_transport) ... ok
+test_paid_receipt_and_settlement_roll_back_together (test_workbench.DeepReviewTests.test_paid_receipt_and_settlement_roll_back_together) ... ok
+test_partial_excel_write_never_published (test_workbench.DeepReviewTests.test_partial_excel_write_never_published) ... ok
+test_source_shape_error_pauses_without_false_completion (test_workbench.DeepReviewTests.test_source_shape_error_pauses_without_false_completion) ... ok
+test_budget_baseline_cannot_reset_spent_amount (test_workbench.FinalBoundaryTests.test_budget_baseline_cannot_reset_spent_amount) ... ok
+test_cross_midnight_actual_billing_day_required_and_accounted (test_workbench.FinalBoundaryTests.test_cross_midnight_actual_billing_day_required_and_accounted) ... ok
+test_invalid_target_and_malformed_record_audited (test_workbench.FinalBoundaryTests.test_invalid_target_and_malformed_record_audited) ... ok
 test_receipt_settles_and_disconnected_no_charge (test_workbench.PaidGatewayTests.test_receipt_settles_and_disconnected_no_charge) ... ok
 test_result_unknown_never_retries (test_workbench.PaidGatewayTests.test_result_unknown_never_retries) ... ok
+test_large_page_denial_and_wrong_type_rejected (test_workbench.PublicWebFixtureTests.test_large_page_denial_and_wrong_type_rejected) ... ok
+test_pinned_address_and_redirect_revalidation (test_workbench.PublicWebFixtureTests.test_pinned_address_and_redirect_revalidation) ... ok
+test_private_and_mixed_dns_blocked_before_connection (test_workbench.PublicWebFixtureTests.test_private_and_mixed_dns_blocked_before_connection) ... ok
+test_public_verifier_matches_business_and_public_mailto_without_execution (test_workbench.PublicWebFixtureTests.test_public_verifier_matches_business_and_public_mailto_without_execution) ... ok
+test_unrelated_business_does_not_qualify (test_workbench.PublicWebFixtureTests.test_unrelated_business_does_not_qualify) ... ok
 test_old_cli_is_not_silently_downgraded (test_workbench.SubscriptionCommandTests.test_old_cli_is_not_silently_downgraded) ... ok
 test_subscription_command_isolated_and_mocked_only (test_workbench.SubscriptionCommandTests.test_subscription_command_isolated_and_mocked_only) ... ok
 test_api_auth_status_never_connected (test_workbench.SubscriptionTests.test_api_auth_status_never_connected) ... ok
 test_api_env_rejected (test_workbench.SubscriptionTests.test_api_env_rejected) ... ok
 test_no_exec_without_explicit_enable (test_workbench.SubscriptionTests.test_no_exec_without_explicit_enable) ... ok
+test_1000_target_preserves_1005_synthetic_qualified_and_export_reconciles (test_workbench.VolumeAndHistoryTests.test_1000_target_preserves_1005_synthetic_qualified_and_export_reconciles) ... ok
+test_history_email_only_multiple_values_normalized (test_workbench.VolumeAndHistoryTests.test_history_email_only_multiple_values_normalized) ... ok
+test_dns_timeout_does_not_block_worker_indefinitely (test_workbench.WebDeadlineTests.test_dns_timeout_does_not_block_worker_indefinitely) ... ok
+test_slow_stream_cannot_run_forever (test_workbench.WebDeadlineTests.test_slow_stream_cannot_run_forever) ... ok
 test_20_company_end_to_end_refill_and_surplus (test_workbench.WorkbenchTests.test_20_company_end_to_end_refill_and_surplus) ... ok
 test_auth_permissions_credits_unknown_fail_closed (test_workbench.WorkbenchTests.test_auth_permissions_credits_unknown_fail_closed) ... ok
 test_concurrent_task_lease (test_workbench.WorkbenchTests.test_concurrent_task_lease) ... ok
@@ -29,6 +54,6 @@ test_single_instance_and_force_kill_release (test_workbench.WorkbenchTests.test_
 test_unexpected_error_does_not_leak (test_workbench.WorkbenchTests.test_unexpected_error_does_not_leak) ... ok
 
 ----------------------------------------------------------------------
-Ran 29 tests in 0.259s
+Ran 54 tests in 1.381s
 
 OK

@@ -231,4 +231,221 @@ class BudgetQueuePauseTests(unittest.TestCase):
             row=s.rows('SELECT * FROM tasks')[0]
             self.assertEqual(row['status'],'paused');self.assertIn('全账号已用量未知',row['reason'])
 
+
+class DeepReviewTests(unittest.TestCase):
+    def setUp(self):self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.store=Store(self.root/'db.sqlite')
+    def tearDown(self):self.temp.cleanup()
+    def test_email_substring_cannot_forge_attribution(self):
+        class Prefix(MockSource):
+            def search(self,page):return [{'name':'Prefix Test','domain':'lube1.example','mock_id':1}],True
+            def verify(self,r):
+                v=super().verify(r);v['text']='sales@lube1.example.attacker.example';return v
+        e=Engine(self.store,Prefix());t=e.create(1,'simulation');e.run(t);self.assertEqual(e.counts(t)['合格有邮箱'],0)
+    def test_malformed_mailboxes_rejected(self):
+        for address in ['a..b@example.com','.a@example.com','a.@example.com','x@-example.com','x@example-.com','x@exam..com','x@exam_ple.com','x@localhost','x'*65+'@example.com']:
+            self.assertEqual(email(address),'',address)
+        self.assertEqual(email('sales+oem@example.com'),'sales+oem@example.com')
+    def test_connection_context_closes(self):
+        import sqlite3
+        with self.store.connect() as db:db.execute('SELECT 1')
+        with self.assertRaises(sqlite3.ProgrammingError):db.execute('SELECT 1')
+    def test_paid_known_receipt_replays_after_process_restart_without_transport(self):
+        from yingba.paid import PaidGateway,Receipt
+        Budget(self.store).confirm(0);calls=[]
+        def transport(action,request):calls.append(action);return Receipt({'records':[1,2]},4,'official-fixture-1')
+        g=PaidGateway(self.store,transport,True);self.assertEqual(g.execute('p1',5,{'page':1}),{'records':[1,2]})
+        restarted=PaidGateway(Store(self.store.path),lambda *a:self.fail('transport must not rerun'),True)
+        self.assertEqual(restarted.execute('p1',5,{'page':1}),{'records':[1,2]});self.assertEqual(calls,['p1'])
+        with self.assertRaises(BudgetPause):restarted.execute('p1',5,{'page':2})
+        self.assertEqual(self.store.rows('SELECT used FROM budgets')[0]['used'],4)
+    def test_paid_receipt_and_settlement_roll_back_together(self):
+        from yingba.paid import PaidGateway,Receipt
+        Budget(self.store).confirm(0);g=PaidGateway(self.store,lambda *args:Receipt({'ok':True},2,'fixture'),True)
+        original=g.budget._settle
+        def fail(db,action,actual,billed_day=None):original(db,action,actual,billed_day);raise RuntimeError('forced commit failure')
+        with patch.object(g.budget,'_settle',side_effect=fail):
+            with self.assertRaises(UnknownOutcome):g.execute('p1',3,{})
+        self.assertEqual(self.store.rows('SELECT used FROM budgets')[0]['used'],0)
+        self.assertEqual(self.store.rows('SELECT status FROM charges')[0]['status'],'unknown')
+        self.assertEqual(self.store.rows('SELECT COUNT(*) n FROM paid_results')[0]['n'],0)
+        g.reconcile('p1',{},Receipt({'ok':True},2,'fixture'))
+        self.assertEqual(g.execute('p1',3,{}),{'ok':True})
+    def test_mock_paid_transport_process_exit_requires_reconciliation(self):
+        Budget(self.store).confirm(0)
+        code='from yingba.db import Store;from yingba.paid import PaidGateway;import sys,os;g=PaidGateway(Store(sys.argv[1]),lambda *args:os._exit(19),True);g.execute("killed",5,{"page":1})'
+        p=subprocess.run([sys.executable,'-c',code,self.store.path]);self.assertEqual(p.returncode,19)
+        self.assertEqual(self.store.rows('SELECT status FROM charges')[0]['status'],'unknown')
+        from yingba.paid import PaidGateway
+        with self.assertRaises(BudgetPause):PaidGateway(self.store,lambda *a:self.fail('must not run'),True).execute('killed',5,{'page':1})
+    def test_partial_excel_write_never_published(self):
+        e=Engine(self.store);t=e.create(1,'simulation');e.run(t);out=self.root/'exports'
+        with patch('yingba.exchange.Workbook.save',side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):export(self.store,t,out)
+        self.assertEqual(list(out.iterdir()),[])
+    def test_large_archive_and_empty_history_fail_cleanly(self):
+        import zipfile
+        p=self.root/'large.xlsx'
+        with zipfile.ZipFile(p,'w',zipfile.ZIP_DEFLATED) as z:z.writestr('big.xml',b'0'*64_000_001)
+        with self.assertRaises(ValueError):import_history(self.store,p)
+        wb=Workbook();p=self.root/'empty.xlsx';wb.save(p)
+        with self.assertRaises(ValueError):import_history(self.store,p)
+        self.assertEqual(self.store.rows('SELECT COUNT(*) n FROM history_imports')[0]['n'],0)
+    def test_excel_formula_mailbox_escaped_in_both_sheets(self):
+        class Formula(MockSource):
+            def search(self,page):return [{'name':'Formula mailbox','domain':'lube1.example','mock_id':1}],True
+            def verify(self,r):
+                v=super().verify(r);v['emails']=['=danger@lube1.example'];v['text']='Business contact =danger@lube1.example';return v
+        e=Engine(self.store,Formula());t=e.create(1,'simulation');e.run(t);p,_=export(self.store,t,self.root)
+        wb=load_workbook(p);self.assertTrue(wb['公司总表']['E2'].value.startswith("'="));self.assertTrue(wb['唯一邮箱清单']['A2'].value.startswith("'="));wb.close()
+    def test_source_shape_error_pauses_without_false_completion(self):
+        class Malformed(MockSource):
+            def verify(self,r):v=super().verify(r);v['text']={'pretend':'sales@lube1.example'};return v
+        e=Engine(self.store,Malformed());t=e.create(1,'simulation');e.run(t)
+        self.assertEqual(self.store.rows('SELECT status FROM tasks')[0]['status'],'paused');self.assertEqual(e.counts(t)['合格有邮箱'],0)
+    def test_backoff_does_not_leave_lease_across_restart(self):
+        class Broken(MockSource):
+            def search(self,page):raise TransientError('retry')
+        e=Engine(self.store,Broken(),lambda:0);t=e.create(1,'simulation');e.step(t);e.step(t)
+        self.assertIsNone(self.store.rows('SELECT owner FROM tasks')[0]['owner'])
+        fresh=Engine(self.store,clock=lambda:3);self.assertTrue(fresh.step(t))
+    def test_boolean_budget_is_not_a_number(self):
+        with self.assertRaises(ValueError):Budget(self.store).confirm(True)
+        Budget(self.store).confirm(0)
+        with self.assertRaises(BudgetPause):Budget(self.store).reserve('bool',True)
+
+
+
+class VolumeAndHistoryTests(unittest.TestCase):
+    def test_1000_target_preserves_1005_synthetic_qualified_and_export_reconciles(self):
+        class Thousand(MockSource):
+            def search(self,page):
+                return [{'name':f'SCALE SYNTHETIC {i}','domain':f'scale{i}.example','apollo_id':f'SCALE-{i}'} for i in range(1005)],True
+            def verify(self,r):
+                address='sales@'+r['domain']
+                return {'identity_confirmed':True,'business_confirmed':True,'category':'润滑油 OEM/ODM','url':'https://'+r['domain']+'/contact','basis':'虚构规模测试，非真实客户','text':address,'emails':[address],'simulation':True}
+        with tempfile.TemporaryDirectory() as temp:
+            store=Store(Path(temp)/'scale.db');engine=Engine(store,Thousand());task=engine.create(1000,'simulation');counts=engine.run(task)
+            self.assertEqual(counts['合格有邮箱'],1005);self.assertEqual(counts['候选'],0)
+            self.assertEqual(store.rows('SELECT status FROM tasks')[0]['status'],'simulation_complete')
+            path,_=export(store,task,Path(temp)/'out');wb=load_workbook(path,read_only=True)
+            self.assertEqual(wb['公司总表'].max_row-1,1005);self.assertEqual(wb['唯一邮箱清单'].max_row-1,1005);wb.close()
+    def test_history_email_only_multiple_values_normalized(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store=Store(Path(temp)/'h.db');wb=Workbook();ws=wb.active;ws.append(['已有邮箱']);ws.append([' SALES@EXAMPLE.COM ; info@other.example\nSALES@EXAMPLE.COM ']);p=Path(temp)/'h.xlsx';wb.save(p)
+            self.assertEqual(import_history(store,p,{'email':'已有邮箱'}),1)
+            self.assertEqual({r['value'] for r in store.rows("SELECT value FROM identities WHERE kind='email'")},{'sales@example.com','info@other.example'})
+
+
+class FinalBoundaryTests(unittest.TestCase):
+    def test_budget_baseline_cannot_reset_spent_amount(self):
+        with tempfile.TemporaryDirectory() as temp:
+            s=Store(Path(temp)/'b.db');b=Budget(s);b.confirm(0);b.reserve('a',50);b.settle('a',50)
+            with self.assertRaises(BudgetPause):b.confirm(0)
+            with self.assertRaises(BudgetPause):b.reserve('b',1)
+    def test_cross_midnight_actual_billing_day_required_and_accounted(self):
+        before=datetime(2026,10,23,15,59,tzinfo=timezone.utc);after=datetime(2026,10,23,16,1,tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as temp:
+            s=Store(Path(temp)/'b.db');b=Budget(s);b.confirm(0,before);b.reserve('cross',40,before);b.unknown('cross')
+            with self.assertRaises(BudgetPause):b.settle('cross',40,now=after)
+            self.assertEqual(s.rows('SELECT status FROM charges')[0]['status'],'unknown')
+            b.settle('cross',40,billed_day='2026-10-24',now=after)
+            with self.assertRaises(BudgetPause):b.reserve('next',1,after)
+            with self.assertRaises(BudgetPause):b.confirm(0,after)
+            b.confirm(40,after);b.reserve('next',10,after)
+            with self.assertRaises(BudgetPause):b.reserve('over',1,after)
+            self.assertEqual(s.rows('SELECT billed_day FROM charge_settlements')[0]['billed_day'],'2026-10-24')
+    def test_invalid_target_and_malformed_record_audited(self):
+        class BadRecord(MockSource):
+            def search(self,page):return [None,{'name':{'bad':1},'domain':'bad.example'},{'name':'no domain','domain':''}],True
+        with tempfile.TemporaryDirectory() as temp:
+            s=Store(Path(temp)/'b.db');e=Engine(s,BadRecord())
+            for target in (True,1.5,'1000',0,-1):
+                with self.assertRaises(ValueError):e.create(target,'simulation')
+            t=e.create(1,'simulation');e.run(t);self.assertEqual(e.counts(t)['合格有邮箱'],0)
+            self.assertEqual(len(s.rows('SELECT * FROM raw_records')),3)
+            self.assertEqual(s.rows('SELECT status FROM tasks')[0]['status'],'insufficient')
+
+
+class PublicWebFixtureTests(unittest.TestCase):
+    def test_public_verifier_matches_business_and_public_mailto_without_execution(self):
+        from yingba.public_web import PublicVerifier,Page
+        class Fixtures:
+            def fetch(self,url,expected_domain):
+                if url.endswith('/'):return Page(url,'<h1>Acme Lubes Ltd</h1><p>Lubricant OEM private label manufacturer</p><a href="/contact">Contact</a><script>send_mail(); sales@evil.example</script>')
+                return Page(url,'<h2>Contact Acme Lubes Ltd</h2><a href="mailto:sales@acme.example">Sales</a>')
+        result=PublicVerifier(Fixtures()).verify({'name':'Acme Lubes Ltd','domain':'acme.example'})
+        self.assertTrue(result['identity_confirmed']);self.assertTrue(result['business_confirmed']);self.assertEqual(result['emails'],['sales@acme.example']);self.assertEqual(result['url'],'https://acme.example/contact');self.assertNotIn('send_mail',result['text'])
+    def test_private_and_mixed_dns_blocked_before_connection(self):
+        from yingba.public_web import PublicFetcher
+        for addresses in [('127.0.0.1',),('169.254.169.254',),('8.8.8.8','10.0.0.2'),('::1',),('192.168.1.1',)]:
+            resolver=lambda *a,**k:[(None,None,None,None,(ip,443)) for ip in addresses]
+            fetcher=PublicFetcher(resolver,lambda *args:self.fail('must never connect'))
+            with self.assertRaises(ConnectionPause):fetcher.fetch('https://acme.example/','acme.example')
+    def test_pinned_address_and_redirect_revalidation(self):
+        from yingba.public_web import PublicFetcher
+        observed=[]
+        class Response:
+            status=302
+            def getheader(self,key,default=None):return 'http://127.0.0.1/' if key=='Location' else default
+        class Connection:
+            def request(self,*args,**kwargs):pass
+            def getresponse(self):return Response()
+            def close(self):pass
+        def factory(host,ip,port,timeout):observed.append((host,ip,port));return Connection()
+        f=PublicFetcher(lambda *a,**k:[(None,None,None,None,('8.8.8.8',443))],factory)
+        with self.assertRaises(ConnectionPause):f.fetch('https://acme.example/','acme.example')
+        self.assertEqual(observed,[('acme.example','8.8.8.8',443)])
+    def test_large_page_denial_and_wrong_type_rejected(self):
+        from yingba.public_web import PublicFetcher
+        for status,ctype,body in [(403,'text/html',b''),(200,'application/json',b'{}'),(200,'text/html',b'x'*150001)]:
+            class Response:
+                def getheader(self,key,default=None):return ctype if key=='Content-Type' else default
+                def read1(self,limit):return body[:limit]
+            response=Response();response.status=status
+            class Connection:
+                def request(self,*a,**k):pass
+                def getresponse(self):return response
+                def close(self):pass
+            f=PublicFetcher(lambda *a,**k:[(None,None,None,None,('8.8.8.8',443))],lambda *a:Connection())
+            with self.assertRaises(ConnectionPause):f.fetch('https://acme.example/','acme.example')
+    def test_unrelated_business_does_not_qualify(self):
+        from yingba.public_web import PublicVerifier,Page
+        class Fixtures:
+            def fetch(self,url,expected_domain):return Page(url,'<h1>Acme Ltd</h1><p>We sell office chairs</p><a href="mailto:sales@acme.example">sales</a>')
+        result=PublicVerifier(Fixtures()).verify({'name':'Acme Ltd','domain':'acme.example'})
+        self.assertFalse(result['business_confirmed']);self.assertFalse(result['simulation'])
+
+class CellControlCharacterTests(unittest.TestCase):
+    def test_xml_control_prefix_cannot_hide_formula(self):
+        from yingba.normalize import cell
+        self.assertEqual(cell('\x00=SUM(A1)'),"'=SUM(A1)")
+        self.assertEqual(cell('normal\x01name'),'normalname')
+
+
+
+class WebDeadlineTests(unittest.TestCase):
+    def test_slow_stream_cannot_run_forever(self):
+        from yingba.public_web import PublicFetcher
+        clock=[0]
+        class Response:
+            status=200
+            def getheader(self,key,default=None):return 'text/html' if key=='Content-Type' else default
+            def read1(self,n):clock[0]+=11;return b'a'
+        class Connection:
+            def request(self,*a,**k):pass
+            def getresponse(self):return Response()
+            def close(self):pass
+        f=PublicFetcher(lambda *a,**k:[(None,None,None,None,('8.8.8.8',443))],lambda *a:Connection(),clock=lambda:clock[0])
+        with self.assertRaises(ConnectionPause):f.fetch('https://acme.example/','acme.example')
+        self.assertEqual(clock[0],33)
+    def test_dns_timeout_does_not_block_worker_indefinitely(self):
+        import threading
+        from yingba.public_web import PublicFetcher
+        release=threading.Event()
+        def resolver(*a,**k):release.wait(2);return []
+        f=PublicFetcher(resolver);f.DNS_TIMEOUT=.01
+        try:
+            with self.assertRaises(ConnectionPause):f.fetch('https://acme.example/','acme.example')
+        finally:release.set()
+
 if __name__=='__main__':unittest.main()

@@ -8,7 +8,7 @@ files=[]
 for name in ('yingba','tests','scripts','docs','wheels','examples','artifacts'):
     for p in (ROOT/name).rglob('*'):
         if p.is_file() and '__pycache__' not in p.parts and p.suffix not in ('.pyc','.zip') and p.name not in ('package-report.json','MANIFEST.sha256.json'):files.append(p)
-files += [ROOT/'README.md',ROOT/'requirements.lock',*(ROOT.glob('*.cmd'))]
+files += [ROOT/'.gitignore',ROOT/'.gitattributes',ROOT/'README.md',ROOT/'requirements.lock',*(ROOT.glob('*.cmd'))]
 manifest={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(files)}
 (ROOT/'artifacts'/'MANIFEST.sha256.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
 files.append(ROOT/'artifacts'/'MANIFEST.sha256.json')

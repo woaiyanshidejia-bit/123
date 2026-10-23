@@ -6,3 +6,4 @@ data/
 .codex/
 .env
 artifacts/*.zip
+!artifacts/YINGBA-Windows-v1.0.0.zip

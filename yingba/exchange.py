@@ -2,32 +2,42 @@ import hashlib
 import json
 import os
 import tempfile
+import zipfile
 from pathlib import Path
 from openpyxl import Workbook,load_workbook
 from openpyxl.styles import Font,PatternFill
 from .engine import stamp
-from .normalize import keys,email,cell
+from .normalize import keys,email,cell,source_emails
 
 DEFAULT_MAPPING={'name':'公司名称','domain':'域名','apollo_id':'Apollo ID','email':'邮箱'}
 def import_history(store,path,mapping=None):
     """Read only, no writes to historical original. Ambiguous headers fail closed."""
     path=Path(path); mapping=mapping or DEFAULT_MAPPING
     if path.suffix.lower()!='.xlsx':raise ValueError('请先将历史表另存为xlsx（不覆盖原件）')
+    if not isinstance(mapping,dict) or any(k not in DEFAULT_MAPPING or not isinstance(v,str) for k,v in mapping.items()):raise ValueError('字段映射无效')
+    if path.stat().st_size>10_000_000:raise ValueError('历史文件最大10MB')
+    with zipfile.ZipFile(path) as archive:
+        infos=archive.infolist()
+        if len(infos)>200 or sum(i.file_size for i in infos)>64_000_000:raise ValueError('历史工作簿展开过大，请分批导入')
     digest=hashlib.sha256(path.read_bytes()).hexdigest()
-    wb=load_workbook(path,read_only=True,data_only=True)
+    wb=load_workbook(path,read_only=True,data_only=True,keep_links=False)
     try:
-        rows=wb.active.iter_rows(values_only=True); header=list(next(rows))
+        rows=wb.active.iter_rows(values_only=True)
+        first=next(rows,None)
+        if not first:raise ValueError('历史表为空')
+        header=list(first)
         if len(header)!=len(set(header)):raise ValueError('历史表含重复列名，请调整字段映射')
         indexes={k:header.index(v) for k,v in mapping.items() if v in header}
         if not any(k in indexes for k in ('name','domain','apollo_id','email')):raise ValueError('未找到可去重字段，请配置字段映射')
         count=0
         with store.transaction() as db:
             if db.execute('SELECT 1 FROM history_imports WHERE sha256=?',(digest,)).fetchone():return 0
-            for row in rows:
+            for number,row in enumerate(rows,1):
+                if number>100000:raise ValueError('历史表超过10万行，请分批导入')
                 r={k:row[i] for k,i in indexes.items()}
                 identities=keys(r)
-                address=email(r.get('email'))
-                if address:identities.append(('email',address))
+                addresses=source_emails(r.get('email',''))
+                for address in addresses:identities.append(('email',address))
                 if not identities:continue
                 for k,v in identities:db.execute('INSERT OR IGNORE INTO identities VALUES(?,?,NULL,1)',(k,v))
                 count+=1
@@ -50,7 +60,7 @@ def export(store,task,directory):
     wb=Workbook(); companies=wb.active;companies.title='公司总表'
     companies.append(['公司ID','公司名称','域名','Apollo ID','邮箱','来源URL','采集时间UTC','核验依据','状态'])
     for cid,rs in grouped.items():
-        r=rs[0];companies.append([cid,cell(r['name']),cell(r['domain']),cell(r['apollo']),'; '.join(x['address'] for x in rs),r['url'],r['evidence_time'],cell(r['basis']),'模拟合格' if t['mode']=='simulation' else '公开核实；非投递验证'])
+        r=rs[0];companies.append([cid,cell(r['name']),cell(r['domain']),cell(r['apollo']),cell('; '.join(x['address'] for x in rs)),r['url'],r['evidence_time'],cell(r['basis']),'模拟合格' if t['mode']=='simulation' else '公开核实；非投递验证'])
     sheet=wb.create_sheet('唯一邮箱清单');sheet.append(['邮箱','归属公司ID','公司名称','来源URL','采集时间UTC','核验依据'])
     by_address={}
     for r in rows:by_address.setdefault(r['address'],[]).append(r)
@@ -65,12 +75,20 @@ def export(store,task,directory):
     # Unique artifacts; no silent overwrite of earlier exports.
     token=__import__('uuid').uuid4().hex[:10]
     path=directory/f'{prefix}{task[:8]}_{token}.xlsx'
-    wb.save(path)
-    check=load_workbook(path,read_only=True)
-    try:
-        assert check['公司总表'].max_row-1==len(grouped)
-        assert check['唯一邮箱清单'].max_row-1==len(by_address)
-    finally:check.close()
     audit=path.with_suffix('.audit.json')
-    audit.write_text(json.dumps({'task':t,'simulation':t['mode']=='simulation','raw_records':raw,'evidence':evidence,'excluded':excluded,'counts':{'companies':len(grouped),'unique_emails':len(by_address)},'xlsx_sha256':hashlib.sha256(path.read_bytes()).hexdigest()},ensure_ascii=False,indent=2),encoding='utf-8')
+    with tempfile.TemporaryDirectory(prefix='.export-',dir=directory) as temp:
+        staged=Path(temp)/path.name
+        wb.save(staged)
+        check=load_workbook(staged,read_only=True)
+        try:
+            if check['公司总表'].max_row-1!=len(grouped) or check['唯一邮箱清单'].max_row-1!=len(by_address):raise ValueError('导出回读对账失败')
+        finally:check.close()
+        staged_audit=Path(temp)/audit.name
+        staged_audit.write_text(json.dumps({'task':t,'simulation':t['mode']=='simulation','raw_records':raw,'evidence':evidence,'excluded':excluded,'counts':{'companies':len(grouped),'unique_emails':len(by_address)},'xlsx_sha256':hashlib.sha256(staged.read_bytes()).hexdigest()},ensure_ascii=False,indent=2),encoding='utf-8')
+        # Publish audit first; Excel is only visible after both files are valid.
+        os.replace(staged_audit,audit)
+        try:os.replace(staged,path)
+        except BaseException:
+            audit.unlink(missing_ok=True)
+            raise
     return path,audit

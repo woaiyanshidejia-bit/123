@@ -1,8 +1,8 @@
 {
   "archive": "YINGBA-Windows-v1.0.0.zip",
-  "archive_sha256": "6cd571119ff291a5a11ee7be71de0164d5edcbf3e33a67656498b27debdd74b7",
-  "entries": 38,
-  "manifest_files_verified": 37,
+  "archive_sha256": "a7252abeda4eb5b96177afe56cca6a900a0ff5b0af62325b0c0a21a33a8b5504",
+  "entries": 42,
+  "manifest_files_verified": 41,
   "fresh_venv_offline_install": "PASS",
   "packaged_unit_tests": "PASS",
   "forbidden_runtime_or_auth_files": 0,
